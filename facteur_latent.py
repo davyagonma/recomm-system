@@ -157,7 +157,7 @@ def recommend(model, user_id, top_n=3):
     """
     Génère les meilleures recommandations pour un utilisateur.
 
-    top_n : nombre d’items à recommander
+    top_n : nombre d'items à recommander
     """
 
     R = model["R"]

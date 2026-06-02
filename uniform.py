@@ -2,7 +2,7 @@ import numpy as np
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Fonction publique commune : R̂ = R @ W
+# Fonction : R̂ = R @ W
 # ─────────────────────────────────────────────────────────────────────────────
 
 def compute_R_hat(R: np.ndarray, W: np.ndarray) -> np.ndarray:

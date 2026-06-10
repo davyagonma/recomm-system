@@ -19,6 +19,8 @@ L'objectif est de ne pas seulement recommander les items ayant les meilleurs sco
 | `recomm_memoire.py` | Prototype issu du notebook Colab avec un exemple CPMpy et des donnees simulees. |
 | `fc_with_cos.py` | Exemple separe de filtrage collaboratif avec similarite cosinus. |
 | `facteur_latent.py` | Exemple separe de recommandation par facteurs latents/SVD. |
+| `u_data_pivot.csv` | Matrice utilisateur-item pivotee : premiere colonne `user_id`, puis une colonne par item. |
+| `recommendations_algos1.csv` | Fichier genere par `algos1.py` avec les recommandations finales. |
 | `exercices/` | Exemples d'utilisation de solveurs et de modeles de contraintes. |
 
 ## Pipeline general
@@ -111,7 +113,13 @@ ou :
 method="svd"
 ```
 
-Le parametre `k` controle le nombre de facteurs latents.
+Le parametre `k` controle le nombre de facteurs latents. Il est utilise seulement avec `method="svd"`, `method="fl"` ou `method="facteurs_latents"`. Avec `method="fc"`, `k` est ignore.
+
+Interpretation de `k` :
+
+- petit `k` : representation plus compacte, recommandations plus generales ;
+- grand `k` : representation plus detaillee, mais potentiellement plus sensible au bruit ;
+- `k` ne change pas le nombre de recommandations produites, il change seulement la maniere dont `W` est construit en SVD.
 
 ### 4. Scores reconstruits `R_hat`
 
@@ -129,6 +137,14 @@ Attention : avec la methode SVD, les scores peuvent etre negatifs, car la matric
 
 Pour chaque utilisateur `u`, on construit un ensemble de candidats `Cu[u]` a partir des meilleurs scores de `R_hat`.
 
+La selection se fait dans cet ordre :
+
+1. calculer tous les scores `R_hat[u, i]` ;
+2. retirer les items deja consommes si `exclude_consumed=True` ;
+3. retirer les items sous `min_score` si ce parametre est donne ;
+4. trier les items restants par score decroissant ;
+5. garder les `n_candidates` premiers.
+
 Parametres importants :
 
 | Parametre | Role |
@@ -136,6 +152,8 @@ Parametres importants :
 | `n_candidates` | Nombre maximal de candidats gardes par utilisateur. |
 | `exclude_consumed` | Si `True`, les items deja consommes sont retires. |
 | `min_score` | Score minimum pour accepter un item candidat. |
+
+`n_candidates` ne correspond donc pas au nombre final de recommandations. Il limite seulement le nombre d'items que le modele CP a le droit de considerer pour chaque utilisateur. Le nombre final est donne par `slate_size`.
 
 Exemple :
 

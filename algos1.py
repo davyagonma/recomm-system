@@ -1,7 +1,73 @@
+import argparse
+import csv
+from pathlib import Path
+
 import numpy as np
 import cpmpy as cp
 
 from uniform import compute_R_hat, W_collaborative_filtering, W_svd
+
+
+def load_pivot_csv(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Charge un CSV pivot utilisateur-item.
+
+    La premiere colonne doit contenir les identifiants utilisateurs, et les
+    colonnes suivantes les identifiants items. Les valeurs sont les notes, avec
+    0 pour une note absente.
+    """
+    path = Path(path)
+    with path.open(newline="") as file:
+        reader = csv.reader(file)
+        header = next(reader)
+
+    if len(header) < 2:
+        raise ValueError("Le CSV doit contenir une colonne utilisateur et au moins un item")
+
+    item_ids = np.array(header[1:])
+    data = np.loadtxt(path, delimiter=",", skiprows=1)
+
+    if data.ndim == 1:
+        data = data.reshape(1, -1)
+
+    user_ids = data[:, 0].astype(int)
+    R = data[:, 1:].astype(float)
+
+    return user_ids, item_ids, R
+
+
+def save_recommendations_csv(
+    path: str | Path,
+    result: dict,
+    user_ids: np.ndarray,
+    item_ids: np.ndarray,
+) -> None:
+    """Ecrit les recommandations sous forme user_id, rang, item_id, score."""
+    path = Path(path)
+    with path.open("w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["user_id", "rank", "item_id", "score", "support_item_ids"])
+
+        R_hat = result["R_hat"]
+        explanations = result.get("explanations", {})
+
+        for u, selected_items in result["recommendations"].items():
+            ordered_items = sorted(
+                selected_items,
+                key=lambda item_index: float(R_hat[u, item_index]),
+                reverse=True,
+            )
+
+            for rank, item_index in enumerate(ordered_items, start=1):
+                support_indices = explanations.get(u, {}).get(item_index, [])
+                support_ids = [str(item_ids[support_index]) for support_index in support_indices]
+                writer.writerow([
+                    int(user_ids[u]),
+                    rank,
+                    item_ids[item_index],
+                    float(R_hat[u, item_index]),
+                    "|".join(support_ids),
+                ])
 
 
 def build_history(R: np.ndarray) -> np.ndarray:
@@ -293,35 +359,102 @@ def recommend_complete(
     )
 
 
-if __name__ == "__main__":
-    R = np.array([
-        [5, 3, 0, 1, 0, 0],
-        [4, 2, 1, 0, 0, 0],
-        [1, 0, 5, 4, 0, 0],
-        [0, 4, 4, 5, 0, 0],
-    ], dtype=float)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Applique le pipeline de recommandation sur un CSV pivot utilisateur-item."
+    )
+    parser.add_argument("--input", default="u_data_pivot.csv", help="CSV pivot a charger")
+    parser.add_argument(
+        "--output",
+        default="recommendations_algos1.csv",
+        help="CSV de recommandations a produire",
+    )
+    parser.add_argument(
+        "--method",
+        default="fc",
+        choices=["fc", "svd", "fl", "facteurs_latents"],
+        help="Methode de construction de W",
+    )
+    parser.add_argument("--k", type=int, default=20, help="Nombre de facteurs pour SVD")
+    parser.add_argument(
+        "--slate-size",
+        type=int,
+        default=5,
+        help="Nombre d'items a recommander par utilisateur",
+    )
+    parser.add_argument(
+        "--n-candidates",
+        type=int,
+        default=50,
+        help="Nombre maximum de candidats gardes par utilisateur avant CP",
+    )
+    parser.add_argument(
+        "--min-score",
+        type=float,
+        default=None,
+        help="Score minimum dans R_hat pour garder un candidat",
+    )
+    parser.add_argument(
+        "--include-consumed",
+        action="store_true",
+        help="Autorise la recommandation d'items deja notes/consommes",
+    )
+    parser.add_argument(
+        "--explanation-min",
+        type=int,
+        default=0,
+        help="Nombre minimal d'items historiques supportant chaque recommandation",
+    )
+    parser.add_argument(
+        "--support-threshold",
+        type=float,
+        default=1e-12,
+        help="Seuil de support utilise pour les explications",
+    )
+    parser.add_argument("--solver", default="ortools", help="Solveur CPMpy a utiliser")
+    return parser.parse_args()
 
-    item_categories = np.array([0, 0, 1, 1, 2, 2])
-    item_providers = np.array([0, 1, 0, 1, 0, 1])
+
+def main() -> None:
+    args = parse_args()
+    user_ids, item_ids, R = load_pivot_csv(args.input)
+
+    print(f"Matrice chargee : {R.shape[0]} utilisateurs x {R.shape[1]} items")
+    print(
+        "Parametres : "
+        f"method={args.method}, slate_size={args.slate_size}, "
+        f"n_candidates={args.n_candidates}"
+    )
 
     result = recommend_complete(
         R=R,
-        method="svd",
-        slate_size=1,
-        n_candidates=4,
-        min_score=None,
-        item_categories=item_categories,
-        category_bounds=(0, 1),
-        item_providers=item_providers,
-        provider_bounds=(1, 6),
-        forbidden_pairs=[(0, 1), (2, 3)],
-        explanation_min=1,
-        support_threshold=1e-12,
+        method=args.method,
+        k=args.k,
+        slate_size=args.slate_size,
+        n_candidates=args.n_candidates,
+        exclude_consumed=not args.include_consumed,
+        min_score=args.min_score,
+        explanation_min=args.explanation_min,
+        support_threshold=args.support_threshold,
+        solver_name=args.solver,
     )
 
-    if result["status"]:
-        print("Objectif :", result["objective"])
-        print("Recommandations :", result["recommendations"])
-        print("Explications :", result["explanations"])
-    else:
+    if not result["status"]:
         print("Aucune solution faisable avec ces contraintes.")
+        return
+
+    save_recommendations_csv(args.output, result, user_ids, item_ids)
+    total_recommendations = sum(len(items) for items in result["recommendations"].values())
+
+    print("Objectif :", result["objective"])
+    print(f"Recommandations produites : {total_recommendations}")
+    print(f"Fichier ecrit : {args.output}")
+
+    first_user = 0
+    first_items = result["recommendations"].get(first_user, [])
+    preview = [str(item_ids[item_index]) for item_index in first_items]
+    print(f"Apercu utilisateur {int(user_ids[first_user])} : {preview}")
+
+
+if __name__ == "__main__":
+    main()

@@ -359,6 +359,35 @@ result_svd = recommend_complete(
 
 Attention : si `min_score=0` retire trop de candidats, le modele CP peut devenir infaisable.
 
+## Interface Streamlit
+
+Une interface web permet aux testeurs non développeurs de configurer le pipeline et de comparer les scénarios S1 à S4.
+
+### Lancement
+
+```bash
+cd codes
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/streamlit run streamlit_app/app.py
+```
+
+Ouvrir l'URL affichée (par défaut http://localhost:8501).
+
+### Fonctionnalités
+
+- Chargement du pivot MovieLens (`u_data_pivot.csv`) ou upload CSV
+- Choix de la méthode **FC** ou **SVD**, hyperparamètres `k`, `slate_size`, `n_candidates`
+- Scénarios **S1** (classique), **S2** (heuristique), **S3** (hybride), **S4** (CPMpy)
+- Contraintes : quotas catégories, paires interdites, exposition fournisseurs, support explicatif
+- Comparaison S1–S4 sur le même utilisateur
+- Export CSV des recommandations
+- Genres MovieLens via `u.item` (télécharger depuis GroupLens si absent)
+
+```bash
+curl -o u.item https://files.grouplens.org/datasets/movielens/ml-100k/u.item
+```
+
 ## Installation
 
 Le projet utilise principalement :

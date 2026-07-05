@@ -371,7 +371,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--method",
-        default="fc",
+        default="svd",
         choices=["fc", "svd", "fl", "facteurs_latents"],
         help="Methode de construction de W",
     )
@@ -446,7 +446,7 @@ def main() -> None:
     save_recommendations_csv(args.output, result, user_ids, item_ids)
     total_recommendations = sum(len(items) for items in result["recommendations"].values())
 
-    print("Objectif :", result["objective"])
+    # print("Objectif :", result["objective"])
     print(f"Recommandations produites : {total_recommendations}")
     print(f"Fichier ecrit : {args.output}")
 

@@ -4,17 +4,16 @@ from pathlib import Path
 
 import numpy as np
 import cpmpy as cp
-
 from uniform import compute_R_hat, W_collaborative_filtering, W_svd
 
 
 def load_pivot_csv(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Charge un CSV pivot utilisateur-item.
+    Load a user-item pivot CSV file.
 
-    La premiere colonne doit contenir les identifiants utilisateurs, et les
-    colonnes suivantes les identifiants items. Les valeurs sont les notes, avec
-    0 pour une note absente.
+    The first column must contain user identifiers, and the following columns
+    must contain item identifiers. Values are ratings, with 0 for a missing
+    rating.
     """
     path = Path(path)
     with path.open(newline="") as file:
@@ -22,7 +21,7 @@ def load_pivot_csv(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray
         header = next(reader)
 
     if len(header) < 2:
-        raise ValueError("Le CSV doit contenir une colonne utilisateur et au moins un item")
+        raise ValueError("The CSV must contain one user column and at least one item column")
 
     item_ids = np.array(header[1:])
     data = np.loadtxt(path, delimiter=",", skiprows=1)
@@ -42,7 +41,7 @@ def save_recommendations_csv(
     user_ids: np.ndarray,
     item_ids: np.ndarray,
 ) -> None:
-    """Ecrit les recommandations sous forme user_id, rang, item_id, score."""
+    """Write recommendations in the form user_id, rank, item_id, score."""
     path = Path(path)
     with path.open("w", newline="") as file:
         writer = csv.writer(file)
@@ -72,21 +71,21 @@ def save_recommendations_csv(
 
 def build_history(R: np.ndarray) -> np.ndarray:
     """
-    Construit Hu, la matrice binaire d'historique utilisateur-item.
+    Build Hu, the binary user-item history matrix.
 
-    Hu[u, i] = 1 si l'utilisateur u a deja consomme/note l'item i.
-    Dans cette version, une note strictement positive dans R signifie que
-    l'item appartient a l'historique de l'utilisateur.
+    Hu[u, i] = 1 if user u has already consumed/rated item i.
+    In this version, a strictly positive rating in R means the item
+    belongs to the user's history.
     """
     return (np.asarray(R) > 0).astype(int)
 
 
 def build_W(R: np.ndarray, method: str = "fc", k: int = 2) -> np.ndarray:
     """
-    Construit W avec l'algorithme choisi.
+    Build W using the chosen algorithm.
 
-    method="fc" utilise le filtrage collaboratif item-item.
-    method="fl" ou method="svd" utilise les facteurs latents par SVD.
+    method="fc" uses item-item collaborative filtering.
+    method="fl" or method="svd" uses latent factors via SVD.
     """
     method = method.lower()
 
@@ -96,7 +95,7 @@ def build_W(R: np.ndarray, method: str = "fc", k: int = 2) -> np.ndarray:
     if method in {"fl", "svd", "facteurs_latents"}:
         return W_svd(R, k=k)
 
-    raise ValueError("method doit etre 'fc', 'fl' ou 'svd'")
+    raise ValueError("method must be 'fc', 'fl', or 'svd'")
 
 
 def build_candidate_sets(
@@ -107,11 +106,11 @@ def build_candidate_sets(
     min_score: float | None = None,
 ) -> list[np.ndarray]:
     """
-    Construit Cu, l'ensemble des items candidats pour chaque utilisateur.
+    Build Cu, the candidate item set for each user.
 
-    Les candidats sont tries par score decroissant dans R_hat.
-    - exclude_consumed=True retire les items deja consommes.
-    - min_score retire les items dont le score est trop faible.
+    Candidates are sorted by descending score in R_hat.
+    - exclude_consumed=True removes already consumed items.
+    - min_score removes items whose score is too low.
     """
     R_hat = np.asarray(R_hat, dtype=float)
     n_users, n_items = R_hat.shape
@@ -141,10 +140,10 @@ def build_candidate_sets(
 
 def _bounds_for(bounds, key, default_min=None, default_max=None):
     """
-    Lit une borne globale ou une borne specifique.
+    Read a global bound or a key-specific bound.
 
-    Exemple global : (0, 2)
-    Exemple par cle : {0: (1, 2), 1: (0, 1)}
+    Global example : (0, 2)
+    Per-key example : {0: (1, 2), 1: (0, 1)}
     """
     if bounds is None:
         return default_min, default_max
@@ -171,14 +170,14 @@ def solve_cp_recommendations(
     solver_name: str = "ortools",
 ):
     """
-    Resout le modele CP et retourne les recommandations.
+    Solve the CP model and return recommendations.
 
-    Contraintes disponibles :
-    - cardinalite : exactement slate_size items par utilisateur ;
-    - categorie : category_bounds=(min,max) ou {categorie: (min,max)} ;
-    - fournisseur : provider_bounds=(min,max) ou {provider: (min,max)} ;
-    - diversite : forbidden_pairs=[(i,j), ...] interdit deux items ensemble ;
-    - explication : au moins explanation_min items historiques j tels que
+    Available constraints:
+    - cardinality : exactly slate_size items per user;
+    - category    : category_bounds=(min,max) or {category: (min,max)};
+    - provider    : provider_bounds=(min,max) or {provider: (min,max)};
+    - diversity   : forbidden_pairs=[(i,j), ...] forbids two items together;
+    - explanation : at least explanation_min history items j such that
       abs(W[j, i]) > support_threshold.
     """
     R_hat = np.asarray(R_hat, dtype=float)
@@ -239,7 +238,7 @@ def solve_cp_recommendations(
     y_uij = {}
     if explanation_min > 0:
         if W is None:
-            raise ValueError("W est obligatoire quand explanation_min > 0")
+            raise ValueError("W is required when explanation_min > 0")
 
         for u in range(n_users):
             consumed_items = np.where(Hu[u] == 1)[0]
@@ -327,10 +326,10 @@ def recommend_complete(
     **cp_constraints,
 ):
     """
-    Pipeline complet : R -> W -> R_hat -> Cu -> modele CP.
+    Full pipeline: R -> W -> R_hat -> Cu -> CP model.
 
-    Si W est fourni, il est utilise directement. Sinon W est construit avec
-    method="fc" ou method="fl"/"svd".
+    If W is provided, it is used directly. Otherwise W is built using
+    method="fc" or method="fl"/"svd".
     """
     R = np.asarray(R, dtype=float)
 
@@ -361,57 +360,57 @@ def recommend_complete(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Applique le pipeline de recommandation sur un CSV pivot utilisateur-item."
+        description="Apply the recommendation pipeline on a user-item pivot CSV."
     )
-    parser.add_argument("--input", default="u_data_pivot.csv", help="CSV pivot a charger")
+    parser.add_argument("--input", default="u_data_pivot.csv", help="Pivot CSV file to load")
     parser.add_argument(
         "--output",
         default="recommendations_algos1.csv",
-        help="CSV de recommandations a produire",
+        help="Recommendations CSV file to produce",
     )
     parser.add_argument(
         "--method",
         default="svd",
         choices=["fc", "svd", "fl", "facteurs_latents"],
-        help="Methode de construction de W",
+        help="Method used to build W",
     )
-    parser.add_argument("--k", type=int, default=20, help="Nombre de facteurs pour SVD")
+    parser.add_argument("--k", type=int, default=20, help="Number of latent factors for SVD")
     parser.add_argument(
         "--slate-size",
         type=int,
         default=5,
-        help="Nombre d'items a recommander par utilisateur",
+        help="Number of items to recommend per user",
     )
     parser.add_argument(
         "--n-candidates",
         type=int,
         default=50,
-        help="Nombre maximum de candidats gardes par utilisateur avant CP",
+        help="Maximum number of candidates kept per user before CP",
     )
     parser.add_argument(
         "--min-score",
         type=float,
         default=None,
-        help="Score minimum dans R_hat pour garder un candidat",
+        help="Minimum score in R_hat to keep a candidate",
     )
     parser.add_argument(
         "--include-consumed",
         action="store_true",
-        help="Autorise la recommandation d'items deja notes/consommes",
+        help="Allow recommending already rated/consumed items",
     )
     parser.add_argument(
         "--explanation-min",
         type=int,
         default=0,
-        help="Nombre minimal d'items historiques supportant chaque recommandation",
+        help="Minimum number of history items supporting each recommendation",
     )
     parser.add_argument(
         "--support-threshold",
         type=float,
         default=1e-12,
-        help="Seuil de support utilise pour les explications",
+        help="Support threshold used for explanations",
     )
-    parser.add_argument("--solver", default="ortools", help="Solveur CPMpy a utiliser")
+    parser.add_argument("--solver", default="ortools", help="CPMpy solver to use")
     return parser.parse_args()
 
 
@@ -419,9 +418,9 @@ def main() -> None:
     args = parse_args()
     user_ids, item_ids, R = load_pivot_csv(args.input)
 
-    print(f"Matrice chargee : {R.shape[0]} utilisateurs x {R.shape[1]} items")
+    print(f"Matrix loaded: {R.shape[0]} users x {R.shape[1]} items")
     print(
-        "Parametres : "
+        "Parameters: "
         f"method={args.method}, slate_size={args.slate_size}, "
         f"n_candidates={args.n_candidates}"
     )
@@ -440,20 +439,20 @@ def main() -> None:
     )
 
     if not result["status"]:
-        print("Aucune solution faisable avec ces contraintes.")
+        print("No feasible solution found with these constraints.")
         return
 
     save_recommendations_csv(args.output, result, user_ids, item_ids)
     total_recommendations = sum(len(items) for items in result["recommendations"].values())
 
-    # print("Objectif :", result["objective"])
-    print(f"Recommandations produites : {total_recommendations}")
-    print(f"Fichier ecrit : {args.output}")
+    # print("Objective:", result["objective"])
+    print(f"Recommendations produced: {total_recommendations}")
+    print(f"File written: {args.output}")
 
     first_user = 0
     first_items = result["recommendations"].get(first_user, [])
     preview = [str(item_ids[item_index]) for item_index in first_items]
-    print(f"Apercu utilisateur {int(user_ids[first_user])} : {preview}")
+    print(f"Preview user {int(user_ids[first_user])}: {preview}")
 
 
 if __name__ == "__main__":

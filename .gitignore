@@ -2,3 +2,4 @@
 __pycache__
 .agents
 agent.log
+streamlit_app/__pycache__

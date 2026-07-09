@@ -2,5 +2,6 @@ numpy>=1.24,<2.0
 pandas>=2.0,<3.0
 scipy>=1.11,<2.0
 streamlit>=1.32,<2.0
-cpmpy>=0.9.25,<0.10.0
-ortools>=9.8,<9.15
+cpmpy==0.9.29
+ortools==9.14.6206
+setuptools

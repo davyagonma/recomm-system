@@ -1,4 +1,4 @@
-"""Stratégies de sélection Top-N S1 à S4 (chapitre 3 du mémoire)."""
+"""Top-N selection strategies S1 to S4 (thesis chapter 3)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from algos1 import recommend_complete, solve_cp_recommendations
 
 @dataclass
 class ConstraintConfig:
-    """Paramètres de contraintes partagés entre S2, S3 et S4."""
+    """Constraint parameters shared by S2, S3, and S4."""
 
     item_categories: np.ndarray | None = None
     category_min: int | None = None
@@ -26,11 +26,13 @@ class ConstraintConfig:
     support_threshold: float = 1e-12
 
     def category_bounds(self):
+        """Return (min, max) per-category bounds, or None if unset."""
         if self.category_min is None and self.category_max is None:
             return None
         return (self.category_min, self.category_max)
 
     def provider_bounds(self):
+        """Return (min, max) global provider exposure bounds, or None if unset."""
         if self.provider_min is None and self.provider_max is None:
             return None
         return (self.provider_min, self.provider_max)
@@ -41,7 +43,7 @@ def _violations(
     constraints: ConstraintConfig,
     global_provider_counts: dict[int, int] | None = None,
 ) -> list[str]:
-    """Liste les contraintes violées par une slate."""
+    """List constraint violations triggered by a slate."""
     issues: list[str] = []
 
     if constraints.item_categories is not None:
@@ -77,6 +79,7 @@ def _violations(
 
 
 def _score_sum(selected: list[int], scores: np.ndarray) -> float:
+    """Return the sum of predicted scores for items in a slate."""
     return float(sum(float(scores[i]) for i in selected))
 
 
@@ -86,6 +89,7 @@ def _dissimilarity(
     item_categories: np.ndarray | None,
     genre_matrix: np.ndarray | None,
 ) -> float:
+    """Mean dissimilarity between item and items already in the partial slate."""
     if not slate:
         return 1.0
     values = []
@@ -106,7 +110,7 @@ def select_topn_classic(
     R_hat: np.ndarray,
     slate_size: int,
 ) -> list[int]:
-    """S1 — Top-N classique par score décroissant."""
+    """S1 — classic Top-N by descending score."""
     ordered = list(Cu[u][:slate_size])
     if len(ordered) < slate_size:
         candidates = np.argsort(R_hat[u])[::-1]
@@ -129,7 +133,7 @@ def select_heuristic(
     constraints: ConstraintConfig,
     pool_size: int | None = None,
 ) -> list[int]:
-    """S2 — Post-traitement heuristique (remplacement local)."""
+    """S2 — heuristic post-processing (local replacement)."""
     pool_size = pool_size or max(slate_size * 3, slate_size)
     pool = list(Cu[u][:pool_size])
     if len(pool) < slate_size:
@@ -179,7 +183,7 @@ def select_hybrid_greedy(
     item_categories: np.ndarray | None = None,
     genre_matrix: np.ndarray | None = None,
 ) -> list[int]:
-    """S3 — Sélection gloutonne pertinence + diversité."""
+    """S3 — greedy selection combining relevance and diversity."""
     candidates = list(Cu[u])
     slate: list[int] = []
 
@@ -218,7 +222,9 @@ def run_selection(
     genre_matrix: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """
-    Exécute S1, S2, S3 ou S4 pour une liste d'utilisateurs (indices matriciels).
+    Run S1, S2, S3, or S4 for a list of users (matrix row indices).
+
+    Returns recommendations, timing, objectives, and feasibility status.
     """
     approach = approach.upper()
     t0 = time.perf_counter()
@@ -294,7 +300,7 @@ def run_selection(
                 genre_matrix,
             )
         else:
-            raise ValueError(f"Approche inconnue : {approach}")
+            raise ValueError(f"Unknown approach: {approach}")
 
         recommendations[u] = slate
         objectives[u] = _score_sum(slate, R_hat[u])
@@ -329,7 +335,7 @@ def run_full_pipeline(
     solver_name: str = "ortools",
     genre_matrix: np.ndarray | None = None,
 ) -> dict[str, Any]:
-    """Pipeline complet R → W → R̂ → Cu → sélection."""
+    """Full pipeline: R → W → R_hat → Cu → selection."""
     from algos1 import build_candidate_sets, build_history, build_W
     from uniform import compute_R_hat
 

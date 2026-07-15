@@ -1,0 +1,63 @@
+{
+  "movielens_fc": {
+    "dataset": "MovieLens 100K",
+    "method_w": "fc",
+    "k": 10,
+    "slate_size": 3,
+    "n_candidates": 30,
+    "pool_size": 25,
+    "sizes": [
+      1600
+    ],
+    "results": [
+      {
+        "target_size": 1600,
+        "n_users": 40,
+        "n_items": 120,
+        "method_id": "C6",
+        "label": "Exhaustive search on bounded pool",
+        "scope": "per-user",
+        "time_s": 0.285222,
+        "objective": 85.27626,
+        "feasible_users": 40,
+        "all_feasible": true,
+        "total_violations": 0,
+        "ratio_vs_fastest": 72.7979,
+        "objective_gap_vs_csp": -0.0,
+        "slower_than_csp": true
+      },
+      {
+        "target_size": 1600,
+        "n_users": 40,
+        "n_items": 120,
+        "method_id": "S2",
+        "label": "Top-N + local heuristic repair",
+        "scope": "per-user",
+        "time_s": 0.003918,
+        "objective": 87.614649,
+        "feasible_users": 21,
+        "all_feasible": false,
+        "total_violations": 19,
+        "ratio_vs_fastest": 1.0,
+        "objective_gap_vs_csp": -2.338389,
+        "slower_than_csp": false
+      },
+      {
+        "target_size": 1600,
+        "n_users": 40,
+        "n_items": 120,
+        "method_id": "S4",
+        "label": "CSP / CPMpy (reference)",
+        "scope": "global",
+        "time_s": 0.154689,
+        "objective": 85.27626,
+        "feasible_users": 40,
+        "all_feasible": true,
+        "total_violations": 0,
+        "ratio_vs_fastest": 39.4816,
+        "objective_gap_vs_csp": -0.0,
+        "slower_than_csp": false
+      }
+    ]
+  }
+}

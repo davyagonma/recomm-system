@@ -459,3 +459,4 @@ s.t. Σ_i x_ui = N              (cardinality)
 ## Note
 
 `recomm_memoire.py` comes from a Colab notebook and contains converted cells (including `!pip` commands). It serves as a prototype and an experiment log. For clean Python usage, use `algos1.py`.
+

@@ -1,0 +1,198 @@
+{
+  "matrix_shape": [
+    5,
+    5
+  ],
+  "method_w": "fc",
+  "k": 2,
+  "slate_size": 2,
+  "time_build_w_s": 0.0006,
+  "constraints": {
+    "item_categories": [
+      0,
+      0,
+      1,
+      1,
+      2
+    ],
+    "category_bounds": [
+      0,
+      1
+    ],
+    "item_providers": [
+      0,
+      1,
+      0,
+      1,
+      0
+    ],
+    "provider_bounds": [
+      1,
+      8
+    ],
+    "forbidden_pairs": [
+      [
+        0,
+        1
+      ],
+      [
+        2,
+        3
+      ]
+    ],
+    "explanation_min": 0,
+    "support_threshold": 1e-12
+  },
+  "results": [
+    {
+      "method_id": "S1",
+      "label": "Top-N only (constraints ignored)",
+      "scope": "per-user",
+      "time_s": 2.8e-05,
+      "objective": 0.510187,
+      "feasible_users": 4,
+      "all_feasible": false,
+      "total_violations": 2,
+      "ratio_vs_fastest": 1.0,
+      "objective_gap_vs_csp": -0.021922,
+      "slower_than_csp": false
+    },
+    {
+      "method_id": "S2",
+      "label": "Top-N + local heuristic repair",
+      "scope": "per-user",
+      "time_s": 5.1e-05,
+      "objective": 0.488265,
+      "feasible_users": 5,
+      "all_feasible": true,
+      "total_violations": 0,
+      "ratio_vs_fastest": 1.8214,
+      "objective_gap_vs_csp": 0.0,
+      "slower_than_csp": false
+    },
+    {
+      "method_id": "S3",
+      "label": "Hybrid greedy (relevance + soft diversity)",
+      "scope": "per-user",
+      "time_s": 0.000194,
+      "objective": 0.488265,
+      "feasible_users": 5,
+      "all_feasible": true,
+      "total_violations": 0,
+      "ratio_vs_fastest": 6.9286,
+      "objective_gap_vs_csp": 0.0,
+      "slower_than_csp": false
+    },
+    {
+      "method_id": "C4",
+      "label": "Constraint-aware greedy construction",
+      "scope": "per-user",
+      "time_s": 9.2e-05,
+      "objective": 0.488265,
+      "feasible_users": 5,
+      "all_feasible": true,
+      "total_violations": 0,
+      "ratio_vs_fastest": 3.2857,
+      "objective_gap_vs_csp": 0.0,
+      "slower_than_csp": false
+    },
+    {
+      "method_id": "C5",
+      "label": "Filter-then-rank (category pre-filter + repair)",
+      "scope": "per-user",
+      "time_s": 8.7e-05,
+      "objective": 0.488265,
+      "feasible_users": 5,
+      "all_feasible": true,
+      "total_violations": 0,
+      "ratio_vs_fastest": 3.1071,
+      "objective_gap_vs_csp": 0.0,
+      "slower_than_csp": false
+    },
+    {
+      "method_id": "C6",
+      "label": "Exhaustive search on bounded pool",
+      "scope": "per-user",
+      "time_s": 4.5e-05,
+      "objective": 0.488265,
+      "feasible_users": 5,
+      "all_feasible": true,
+      "total_violations": 0,
+      "ratio_vs_fastest": 1.6071,
+      "objective_gap_vs_csp": 0.0,
+      "slower_than_csp": false
+    },
+    {
+      "method_id": "C7",
+      "label": "Global sequential greedy (provider exposure)",
+      "scope": "global",
+      "time_s": 6.4e-05,
+      "objective": 0.488265,
+      "feasible_users": 5,
+      "all_feasible": true,
+      "total_violations": 0,
+      "ratio_vs_fastest": 2.2857,
+      "objective_gap_vs_csp": 0.0,
+      "slower_than_csp": false
+    },
+    {
+      "method_id": "C8",
+      "label": "Top-N + explanation post-filter",
+      "scope": "per-user",
+      "time_s": 4.8e-05,
+      "objective": 0.488265,
+      "feasible_users": 5,
+      "all_feasible": true,
+      "total_violations": 0,
+      "ratio_vs_fastest": 1.7143,
+      "objective_gap_vs_csp": 0.0,
+      "slower_than_csp": false
+    },
+    {
+      "method_id": "S4",
+      "label": "CSP / CPMpy (reference)",
+      "scope": "global",
+      "time_s": 0.014591,
+      "objective": 0.488265,
+      "feasible_users": 5,
+      "all_feasible": true,
+      "total_violations": 0,
+      "ratio_vs_fastest": 521.1071,
+      "objective_gap_vs_csp": 0.0,
+      "slower_than_csp": false
+    }
+  ],
+  "csp_reference": {
+    "method_id": "S4",
+    "label": "CSP / CPMpy (reference)",
+    "scope": "global",
+    "elapsed_s": 0.014591,
+    "recommendations": {
+      "0": [
+        2,
+        4
+      ],
+      "1": [
+        3,
+        4
+      ],
+      "2": [
+        1,
+        4
+      ],
+      "3": [
+        0,
+        4
+      ],
+      "4": [
+        1,
+        4
+      ]
+    },
+    "objective": 0.4882653211209521,
+    "csp_status": true,
+    "feasible_users": 5,
+    "all_users_feasible": true,
+    "total_violations": 0
+  }
+}

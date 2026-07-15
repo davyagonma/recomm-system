@@ -1,0 +1,10 @@
+method_id,label,scope,time_s,objective,feasible_users,all_feasible,total_violations,ratio_vs_fastest,objective_gap_vs_csp,slower_than_csp
+S1,Top-N only (constraints ignored),per-user,2.8e-05,0.510187,4,False,2,1.0,-0.021922,False
+S2,Top-N + local heuristic repair,per-user,5.1e-05,0.488265,5,True,0,1.8214,0.0,False
+S3,Hybrid greedy (relevance + soft diversity),per-user,0.000194,0.488265,5,True,0,6.9286,0.0,False
+C4,Constraint-aware greedy construction,per-user,9.2e-05,0.488265,5,True,0,3.2857,0.0,False
+C5,Filter-then-rank (category pre-filter + repair),per-user,8.7e-05,0.488265,5,True,0,3.1071,0.0,False
+C6,Exhaustive search on bounded pool,per-user,4.5e-05,0.488265,5,True,0,1.6071,0.0,False
+C7,Global sequential greedy (provider exposure),global,6.4e-05,0.488265,5,True,0,2.2857,0.0,False
+C8,Top-N + explanation post-filter,per-user,4.8e-05,0.488265,5,True,0,1.7143,0.0,False
+S4,CSP / CPMpy (reference),global,0.014591,0.488265,5,True,0,521.1071,0.0,False

@@ -1,4 +1,4 @@
-"""Chargement des métadonnées items (genres MovieLens, catégories, fournisseurs)."""
+"""Item metadata loading (MovieLens genres, categories, providers)."""
 
 from __future__ import annotations
 
@@ -32,10 +32,10 @@ GENRES = [
 
 def load_u_item(path: str | Path) -> tuple[dict[int, str], np.ndarray, np.ndarray]:
     """
-    Charge u.item MovieLens 100K.
+    Load MovieLens 100K u.item metadata.
 
-    Retourne (titres, catégories primaires, vecteurs multi-genres binaires).
-    La catégorie primaire est l'index du premier genre actif.
+    Returns (titles, primary categories, binary multi-genre vectors).
+    The primary category is the index of the first active genre flag.
     """
     path = Path(path)
     titles: dict[int, str] = {}
@@ -63,10 +63,10 @@ def build_item_metadata(
     num_synthetic_categories: int = 19,
 ) -> dict:
     """
-    Construit titres, catégories et fournisseurs alignés sur item_ids du pivot.
+    Build titles, categories, and providers aligned with pivot item_ids.
 
-    Si u.item est absent, les catégories sont dérivées de movie_id mod N
-    (approximation documentée pour la démo).
+    If u.item is missing, categories are derived from movie_id mod N
+    (documented synthetic approximation for demo purposes).
     """
     item_ids = np.asarray(item_ids)
     n_items = len(item_ids)

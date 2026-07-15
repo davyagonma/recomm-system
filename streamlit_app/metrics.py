@@ -1,4 +1,4 @@
-"""Métriques de qualité des listes Top-N."""
+"""Top-N slate quality metrics."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ def intra_list_diversity(
     item_categories: np.ndarray | None = None,
     genre_matrix: np.ndarray | None = None,
 ) -> float:
-    """Diversité intra-liste : proportion de paires d'items dissimilaires."""
+    """Intra-list diversity: fraction of item pairs that are dissimilar."""
     if len(selected) < 2:
         return 0.0
 
@@ -41,7 +41,7 @@ def slate_metrics(
     item_categories: np.ndarray | None = None,
     genre_matrix: np.ndarray | None = None,
 ) -> dict:
-    """Résumé numérique d'une slate pour un utilisateur."""
+    """Numeric summary of one user's recommendation slate."""
     if not selected:
         return {
             "count": 0,

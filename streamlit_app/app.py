@@ -1,7 +1,7 @@
 """
-Interface Streamlit — Recommandation Top-N sous contraintes (CPMpy).
+Streamlit UI — constrained Top-N recommendation (CPMpy).
 
-Lancement :
+Run locally:
     cd codes
     streamlit run streamlit_app/app.py
 """
@@ -40,6 +40,7 @@ APPROACHES = {
 
 
 def init_session_state() -> None:
+    """Initialize Streamlit session state keys with default values."""
     defaults = {
         "last_result": None,
         "comparison_results": None,
@@ -54,17 +55,19 @@ def init_session_state() -> None:
 
 
 def load_dataset(uploaded_file, pivot_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Load user-item pivot matrix from an upload or a local CSV path."""
     if uploaded_file is not None:
         content = uploaded_file.read()
         tmp = ROOT / ".streamlit_upload.csv"
         tmp.write_bytes(content)
         return load_pivot_csv(tmp)
     if not pivot_path.exists():
-        raise FileNotFoundError(f"Fichier pivot introuvable : {pivot_path}")
+        raise FileNotFoundError(f"Pivot file not found: {pivot_path}")
     return load_pivot_csv(pivot_path)
 
 
 def parse_forbidden_pairs(text: str, item_id_to_index: dict[int, int]) -> list[tuple[int, int]]:
+    """Parse semicolon-separated item_id pairs into matrix index pairs."""
     pairs: list[tuple[int, int]] = []
     for chunk in text.replace("\n", ";").split(";"):
         chunk = chunk.strip()
@@ -82,6 +85,7 @@ def parse_forbidden_pairs(text: str, item_id_to_index: dict[int, int]) -> list[t
 
 
 def build_constraints_from_sidebar(metadata: dict) -> ConstraintConfig:
+    """Build a ConstraintConfig from sidebar widget values in session state."""
     cfg = ConstraintConfig()
     cfg.item_categories = metadata["item_categories"]
     cfg.item_providers = metadata["item_providers"]
@@ -115,6 +119,7 @@ def recommendations_to_dataframe(
     metadata: dict,
     selected_user_index: int,
 ) -> pd.DataFrame:
+    """Format one user's recommendations as a display DataFrame."""
     u = selected_user_index
     R_hat = result["R_hat"]
     rows = []
@@ -141,6 +146,7 @@ def recommendations_to_dataframe(
 
 
 def export_csv_bytes(result: dict, user_ids: np.ndarray, item_ids: np.ndarray) -> bytes:
+    """Serialize recommendations to CSV bytes for download."""
     buffer = io.StringIO()
     path = ROOT / ".streamlit_export.csv"
     save_recommendations_csv(path, result, user_ids, item_ids)
@@ -148,6 +154,7 @@ def export_csv_bytes(result: dict, user_ids: np.ndarray, item_ids: np.ndarray) -
 
 
 def render_sidebar() -> dict:
+    """Render sidebar widgets and return the current run configuration."""
     st.sidebar.header("Configuration")
 
     uploaded = st.sidebar.file_uploader("CSV pivot (optionnel)", type=["csv"])
@@ -231,11 +238,12 @@ def render_sidebar() -> dict:
 
 
 def resolve_user_indices(user_ids: np.ndarray, scope: tuple) -> list[int]:
+    """Map sidebar user scope selection to matrix row indices."""
     kind, value = scope
     id_to_index = {int(v): i for i, v in enumerate(user_ids)}
     if kind == "single":
         if value not in id_to_index:
-            raise ValueError(f"user_id {value} absent du jeu de données.")
+            raise ValueError(f"user_id {value} not found in the dataset.")
         return [id_to_index[value]]
     if kind == "first_n":
         return list(range(min(int(value), len(user_ids))))
@@ -243,9 +251,10 @@ def resolve_user_indices(user_ids: np.ndarray, scope: tuple) -> list[int]:
 
 
 def main() -> None:
+    """Streamlit application entry point."""
     st.set_page_config(
         page_title="Recommandation Top-N — CPMpy",
-        page_icon="🎯",
+        page_icon="U",
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -464,17 +473,17 @@ def main() -> None:
     with tab_about:
         st.markdown(
             """
-            ### Objectif
-            Cette interface permet de tester le pipeline **R → W → R̂ → C_u → Top-N**
-            décrit dans le mémoire, sans manipuler le code Python.
+            ### Goal
+            This interface tests the **R → W → R_hat → C_u → Top-N**
+            pipeline from the thesis without editing Python code directly.
 
-            ### Scénarios
-            - **S1** : tri par score (baseline)
-            - **S2** : correction heuristique locale des contraintes
-            - **S3** : glouton pertinence + diversité (λ)
-            - **S4** : optimisation CPMpy sous contraintes déclaratives
+            ### Scenarios
+            - **S1** : score-based ranking (baseline)
+            - **S2** : local heuristic constraint repair
+            - **S3** : greedy relevance + diversity (λ)
+            - **S4** : CPMpy optimization under declarative constraints
 
-            ### Lancement local
+            ### Local run
             ```bash
             cd codes
             pip install -r requirements.txt

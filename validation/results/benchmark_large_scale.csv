@@ -1,0 +1,106 @@
+target_size,n_users,n_items,n_ratings,pool_size,method_id,label,time_s,csp_time_s,time_ratio_vs_csp,slower_than_csp,objective,csp_objective,all_feasible,total_violations
+1600,40,120,3719,12,S2,Top-N + local heuristic repair,0.001308,0.115783,0.0113,False,87.614649,85.27626,False,19
+1600,40,120,3719,12,S3,Hybrid greedy (relevance + soft diversity),0.016677,0.115783,0.144,False,85.570408,85.27626,False,1
+1600,40,120,3719,12,C4,Constraint-aware greedy construction,0.006291,0.115783,0.0543,False,85.27626,85.27626,True,0
+1600,40,120,3719,12,C6,Exhaustive search on bounded pool,0.026035,0.115783,0.2249,False,85.27626,85.27626,True,0
+1600,40,120,3719,12,C5,Filter-then-rank (category pre-filter + repair),0.00103,0.115783,0.0089,False,85.27626,85.27626,True,0
+1600,40,120,3719,25,S2,Top-N + local heuristic repair,0.003549,0.115783,0.0307,False,87.614649,85.27626,False,19
+1600,40,120,3719,25,S3,Hybrid greedy (relevance + soft diversity),0.017316,0.115783,0.1496,False,85.570408,85.27626,False,1
+1600,40,120,3719,25,C4,Constraint-aware greedy construction,0.007042,0.115783,0.0608,False,85.27626,85.27626,True,0
+1600,40,120,3719,25,C6,Exhaustive search on bounded pool,0.219084,0.115783,1.8922,True,85.27626,85.27626,True,0
+1600,40,120,3719,25,C5,Filter-then-rank (category pre-filter + repair),0.000989,0.115783,0.0085,False,85.27626,85.27626,True,0
+1600,40,120,3719,30,S2,Top-N + local heuristic repair,0.002863,0.115783,0.0247,False,87.614649,85.27626,False,19
+1600,40,120,3719,30,S3,Hybrid greedy (relevance + soft diversity),0.014908,0.115783,0.1288,False,85.570408,85.27626,False,1
+1600,40,120,3719,30,C4,Constraint-aware greedy construction,0.006798,0.115783,0.0587,False,85.27626,85.27626,True,0
+1600,40,120,3719,30,C6,Exhaustive search on bounded pool,0.27291,0.115783,2.3571,True,85.27626,85.27626,True,0
+1600,40,120,3719,30,C5,Filter-then-rank (category pre-filter + repair),0.001056,0.115783,0.0091,False,85.27626,85.27626,True,0
+1600,40,120,3719,35,S2,Top-N + local heuristic repair,0.003079,0.115783,0.0266,False,87.614649,85.27626,False,19
+1600,40,120,3719,35,S3,Hybrid greedy (relevance + soft diversity),0.015599,0.115783,0.1347,False,85.570408,85.27626,False,1
+1600,40,120,3719,35,C4,Constraint-aware greedy construction,0.00692,0.115783,0.0598,False,85.27626,85.27626,True,0
+1600,40,120,3719,35,C6,Exhaustive search on bounded pool,0.34852,0.115783,3.0101,True,85.27626,85.27626,True,0
+1600,40,120,3719,35,C5,Filter-then-rank (category pre-filter + repair),0.001131,0.115783,0.0098,False,85.27626,85.27626,True,0
+1600,40,120,3719,,S4,CSP / CPMpy (reference),0.115783,0.115783,1.0,False,85.27626,85.27626,True,0
+6400,80,240,11998,12,S2,Top-N + local heuristic repair,0.008744,0.501636,0.0174,False,162.866735,159.309641,False,58
+6400,80,240,11998,12,S3,Hybrid greedy (relevance + soft diversity),0.11173,0.501636,0.2227,False,159.309641,159.309641,True,0
+6400,80,240,11998,12,C4,Constraint-aware greedy construction,0.049901,0.501636,0.0995,False,159.309641,159.309641,True,0
+6400,80,240,11998,12,C6,Exhaustive search on bounded pool,0.108097,0.501636,0.2155,False,159.309641,159.309641,True,0
+6400,80,240,11998,12,C5,Filter-then-rank (category pre-filter + repair),0.007911,0.501636,0.0158,False,159.309641,159.309641,True,0
+6400,80,240,11998,25,S2,Top-N + local heuristic repair,0.020551,0.501636,0.041,False,162.866735,159.309641,False,58
+6400,80,240,11998,25,S3,Hybrid greedy (relevance + soft diversity),0.121482,0.501636,0.2422,False,159.309641,159.309641,True,0
+6400,80,240,11998,25,C4,Constraint-aware greedy construction,0.053189,0.501636,0.106,False,159.309641,159.309641,True,0
+6400,80,240,11998,25,C6,Exhaustive search on bounded pool,0.642731,0.501636,1.2813,True,159.309641,159.309641,True,0
+6400,80,240,11998,25,C5,Filter-then-rank (category pre-filter + repair),0.003608,0.501636,0.0072,False,159.309641,159.309641,True,0
+6400,80,240,11998,30,S2,Top-N + local heuristic repair,0.024415,0.501636,0.0487,False,162.866735,159.309641,False,58
+6400,80,240,11998,30,S3,Hybrid greedy (relevance + soft diversity),0.11459,0.501636,0.2284,False,159.309641,159.309641,True,0
+6400,80,240,11998,30,C4,Constraint-aware greedy construction,0.050048,0.501636,0.0998,False,159.309641,159.309641,True,0
+6400,80,240,11998,30,C6,Exhaustive search on bounded pool,1.129248,0.501636,2.2511,True,159.309641,159.309641,True,0
+6400,80,240,11998,30,C5,Filter-then-rank (category pre-filter + repair),0.00352,0.501636,0.007,False,159.309641,159.309641,True,0
+6400,80,240,11998,35,S2,Top-N + local heuristic repair,0.029345,0.501636,0.0585,False,162.866735,159.309641,False,58
+6400,80,240,11998,35,S3,Hybrid greedy (relevance + soft diversity),0.117984,0.501636,0.2352,False,159.309641,159.309641,True,0
+6400,80,240,11998,35,C4,Constraint-aware greedy construction,0.052529,0.501636,0.1047,False,159.309641,159.309641,True,0
+6400,80,240,11998,35,C6,Exhaustive search on bounded pool,1.921843,0.501636,3.8312,True,159.309641,159.309641,True,0
+6400,80,240,11998,35,C5,Filter-then-rank (category pre-filter + repair),0.003742,0.501636,0.0075,False,159.309641,159.309641,True,0
+6400,80,240,11998,,S4,CSP / CPMpy (reference),0.501636,0.501636,1.0,False,159.309641,159.309641,True,0
+16000,126,378,23808,12,S2,Top-N + local heuristic repair,0.002663,0.813353,0.0033,False,206.10798,205.995491,False,132
+16000,126,378,23808,12,S3,Hybrid greedy (relevance + soft diversity),0.221077,0.813353,0.2718,False,205.995491,205.995491,True,0
+16000,126,378,23808,12,C4,Constraint-aware greedy construction,0.05933,0.813353,0.0729,False,205.995491,205.995491,True,0
+16000,126,378,23808,12,C6,Exhaustive search on bounded pool,0.160255,0.813353,0.197,False,205.995491,205.995491,True,0
+16000,126,378,23808,12,C5,Filter-then-rank (category pre-filter + repair),0.012982,0.813353,0.016,False,205.995491,205.995491,True,0
+16000,126,378,23808,25,S2,Top-N + local heuristic repair,0.004242,0.813353,0.0052,False,206.10798,205.995491,False,132
+16000,126,378,23808,25,S3,Hybrid greedy (relevance + soft diversity),0.207413,0.813353,0.255,False,205.995491,205.995491,True,0
+16000,126,378,23808,25,C4,Constraint-aware greedy construction,0.057295,0.813353,0.0704,False,205.995491,205.995491,True,0
+16000,126,378,23808,25,C6,Exhaustive search on bounded pool,1.135845,0.813353,1.3965,True,205.995491,205.995491,True,0
+16000,126,378,23808,25,C5,Filter-then-rank (category pre-filter + repair),0.007739,0.813353,0.0095,False,205.995491,205.995491,True,0
+16000,126,378,23808,30,S2,Top-N + local heuristic repair,0.007869,0.813353,0.0097,False,206.10798,205.995491,False,132
+16000,126,378,23808,30,S3,Hybrid greedy (relevance + soft diversity),0.256047,0.813353,0.3148,False,205.995491,205.995491,True,0
+16000,126,378,23808,30,C4,Constraint-aware greedy construction,0.046074,0.813353,0.0566,False,205.995491,205.995491,True,0
+16000,126,378,23808,30,C6,Exhaustive search on bounded pool,2.16008,0.813353,2.6558,True,205.995491,205.995491,True,0
+16000,126,378,23808,30,C5,Filter-then-rank (category pre-filter + repair),0.008195,0.813353,0.0101,False,205.995491,205.995491,True,0
+16000,126,378,23808,35,S2,Top-N + local heuristic repair,0.005657,0.813353,0.007,False,206.10798,205.995491,False,132
+16000,126,378,23808,35,S3,Hybrid greedy (relevance + soft diversity),0.226952,0.813353,0.279,False,205.995491,205.995491,True,0
+16000,126,378,23808,35,C4,Constraint-aware greedy construction,0.056979,0.813353,0.0701,False,205.995491,205.995491,True,0
+16000,126,378,23808,35,C6,Exhaustive search on bounded pool,3.359078,0.813353,4.1299,True,205.995491,205.995491,True,0
+16000,126,378,23808,35,C5,Filter-then-rank (category pre-filter + repair),0.006495,0.813353,0.008,False,205.995491,205.995491,True,0
+16000,126,378,23808,,S4,CSP / CPMpy (reference),0.813353,0.813353,1.0,False,205.995491,205.995491,True,0
+36000,190,570,40272,12,S2,Top-N + local heuristic repair,0.010675,1.382202,0.0077,False,248.035938,247.328277,False,42
+36000,190,570,40272,12,S3,Hybrid greedy (relevance + soft diversity),0.308686,1.382202,0.2233,False,247.328277,247.328277,True,0
+36000,190,570,40272,12,C4,Constraint-aware greedy construction,0.078424,1.382202,0.0567,False,247.328277,247.328277,True,0
+36000,190,570,40272,12,C6,Exhaustive search on bounded pool,0.168715,1.382202,0.1221,False,247.328277,247.328277,True,0
+36000,190,570,40272,12,C5,Filter-then-rank (category pre-filter + repair),0.011109,1.382202,0.008,False,247.328277,247.328277,True,0
+36000,190,570,40272,25,S2,Top-N + local heuristic repair,0.021268,1.382202,0.0154,False,248.035938,247.328277,False,42
+36000,190,570,40272,25,S3,Hybrid greedy (relevance + soft diversity),0.319414,1.382202,0.2311,False,247.328277,247.328277,True,0
+36000,190,570,40272,25,C4,Constraint-aware greedy construction,0.080947,1.382202,0.0586,False,247.328277,247.328277,True,0
+36000,190,570,40272,25,C6,Exhaustive search on bounded pool,1.832575,1.382202,1.3258,True,247.328277,247.328277,True,0
+36000,190,570,40272,25,C5,Filter-then-rank (category pre-filter + repair),0.01148,1.382202,0.0083,False,247.328277,247.328277,True,0
+36000,190,570,40272,30,S2,Top-N + local heuristic repair,0.023676,1.382202,0.0171,False,248.035938,247.328277,False,42
+36000,190,570,40272,30,S3,Hybrid greedy (relevance + soft diversity),0.27269,1.382202,0.1973,False,247.328277,247.328277,True,0
+36000,190,570,40272,30,C4,Constraint-aware greedy construction,0.086055,1.382202,0.0623,False,247.328277,247.328277,True,0
+36000,190,570,40272,30,C6,Exhaustive search on bounded pool,3.396075,1.382202,2.457,True,247.328277,247.328277,True,0
+36000,190,570,40272,30,C5,Filter-then-rank (category pre-filter + repair),0.014256,1.382202,0.0103,False,247.328277,247.328277,True,0
+36000,190,570,40272,35,S2,Top-N + local heuristic repair,0.028382,1.382202,0.0205,False,248.035938,247.328277,False,42
+36000,190,570,40272,35,S3,Hybrid greedy (relevance + soft diversity),0.276288,1.382202,0.1999,False,247.328277,247.328277,True,0
+36000,190,570,40272,35,C4,Constraint-aware greedy construction,0.082601,1.382202,0.0598,False,247.328277,247.328277,True,0
+36000,190,570,40272,35,C6,Exhaustive search on bounded pool,5.532453,1.382202,4.0026,True,247.328277,247.328277,True,0
+36000,190,570,40272,35,C5,Filter-then-rank (category pre-filter + repair),0.011949,1.382202,0.0086,False,247.328277,247.328277,True,0
+36000,190,570,40272,,S4,CSP / CPMpy (reference),1.382202,1.382202,1.0,False,247.328277,247.328277,True,0
+64000,253,759,54250,12,S2,Top-N + local heuristic repair,0.013153,1.805373,0.0073,False,302.78803,301.858361,False,41
+64000,253,759,54250,12,S3,Hybrid greedy (relevance + soft diversity),0.50233,1.805373,0.2782,False,301.858361,301.858361,True,0
+64000,253,759,54250,12,C4,Constraint-aware greedy construction,0.120084,1.805373,0.0665,False,301.858361,301.858361,True,0
+64000,253,759,54250,12,C6,Exhaustive search on bounded pool,0.238718,1.805373,0.1322,False,301.858361,301.858361,True,0
+64000,253,759,54250,12,C5,Filter-then-rank (category pre-filter + repair),0.016428,1.805373,0.0091,False,301.858361,301.858361,True,0
+64000,253,759,54250,25,S2,Top-N + local heuristic repair,0.024375,1.805373,0.0135,False,302.78803,301.858361,False,41
+64000,253,759,54250,25,S3,Hybrid greedy (relevance + soft diversity),0.377269,1.805373,0.209,False,301.858361,301.858361,True,0
+64000,253,759,54250,25,C4,Constraint-aware greedy construction,0.121288,1.805373,0.0672,False,301.858361,301.858361,True,0
+64000,253,759,54250,25,C6,Exhaustive search on bounded pool,2.680241,1.805373,1.4846,True,301.858361,301.858361,True,0
+64000,253,759,54250,25,C5,Filter-then-rank (category pre-filter + repair),0.017107,1.805373,0.0095,False,301.858361,301.858361,True,0
+64000,253,759,54250,30,S2,Top-N + local heuristic repair,0.029712,1.805373,0.0165,False,302.78803,301.858361,False,41
+64000,253,759,54250,30,S3,Hybrid greedy (relevance + soft diversity),0.373067,1.805373,0.2066,False,301.858361,301.858361,True,0
+64000,253,759,54250,30,C4,Constraint-aware greedy construction,0.125791,1.805373,0.0697,False,301.858361,301.858361,True,0
+64000,253,759,54250,30,C6,Exhaustive search on bounded pool,4.900274,1.805373,2.7143,True,301.858361,301.858361,True,0
+64000,253,759,54250,30,C5,Filter-then-rank (category pre-filter + repair),0.017493,1.805373,0.0097,False,301.858361,301.858361,True,0
+64000,253,759,54250,35,S2,Top-N + local heuristic repair,0.034834,1.805373,0.0193,False,302.78803,301.858361,False,41
+64000,253,759,54250,35,S3,Hybrid greedy (relevance + soft diversity),0.382453,1.805373,0.2118,False,301.858361,301.858361,True,0
+64000,253,759,54250,35,C4,Constraint-aware greedy construction,0.114881,1.805373,0.0636,False,301.858361,301.858361,True,0
+64000,253,759,54250,35,C6,Exhaustive search on bounded pool,8.215169,1.805373,4.5504,True,301.858361,301.858361,True,0
+64000,253,759,54250,35,C5,Filter-then-rank (category pre-filter + repair),0.020908,1.805373,0.0116,False,301.858361,301.858361,True,0
+64000,253,759,54250,,S4,CSP / CPMpy (reference),1.805373,1.805373,1.0,False,301.858361,301.858361,True,0

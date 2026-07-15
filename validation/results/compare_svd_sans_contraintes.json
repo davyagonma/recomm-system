@@ -1,0 +1,147 @@
+{
+  "method": "svd",
+  "k": 2,
+  "constraints": "aucune (slate_size uniquement)",
+  "matrix_shape": [
+    5,
+    5
+  ],
+  "slate_size": 2,
+  "n_candidates": null,
+  "min_score": null,
+  "timing_s": {
+    "pipeline": 0.000783,
+    "csp": 0.011027,
+    "classic": 2.9e-05
+  },
+  "csp_status": true,
+  "csp_objective": -6.47585734171863,
+  "classic_objective": -6.475857341718629,
+  "comparison": {
+    "all_identical": true,
+    "n_users": 5,
+    "n_identical_users": 5,
+    "mean_jaccard": 1.0,
+    "per_user": [
+      {
+        "user": 0,
+        "csp_svd": [
+          2,
+          4
+        ],
+        "classic_svd": [
+          2,
+          4
+        ],
+        "identical": true,
+        "jaccard": 1.0,
+        "objective_csp_svd": -1.8088260977553652,
+        "objective_classic_svd": -1.8088260977553652
+      },
+      {
+        "user": 1,
+        "csp_svd": [
+          3,
+          4
+        ],
+        "classic_svd": [
+          3,
+          4
+        ],
+        "identical": true,
+        "jaccard": 1.0,
+        "objective_csp_svd": -1.6941810981826013,
+        "objective_classic_svd": -1.6941810981826013
+      },
+      {
+        "user": 2,
+        "csp_svd": [
+          1,
+          4
+        ],
+        "classic_svd": [
+          1,
+          4
+        ],
+        "identical": true,
+        "jaccard": 1.0,
+        "objective_csp_svd": 0.11986910898655734,
+        "objective_classic_svd": 0.11986910898655734
+      },
+      {
+        "user": 3,
+        "csp_svd": [
+          0,
+          4
+        ],
+        "classic_svd": [
+          0,
+          4
+        ],
+        "identical": true,
+        "jaccard": 1.0,
+        "objective_csp_svd": -3.038197747547498,
+        "objective_classic_svd": -3.038197747547498
+      },
+      {
+        "user": 4,
+        "csp_svd": [
+          1,
+          4
+        ],
+        "classic_svd": [
+          1,
+          4
+        ],
+        "identical": true,
+        "jaccard": 1.0,
+        "objective_csp_svd": -0.054521507219722126,
+        "objective_classic_svd": -0.054521507219722126
+      }
+    ]
+  },
+  "csp_recommendations": {
+    "0": [
+      4,
+      2
+    ],
+    "1": [
+      4,
+      3
+    ],
+    "2": [
+      1,
+      4
+    ],
+    "3": [
+      4,
+      0
+    ],
+    "4": [
+      4,
+      1
+    ]
+  },
+  "classic_recommendations": {
+    "0": [
+      4,
+      2
+    ],
+    "1": [
+      4,
+      3
+    ],
+    "2": [
+      1,
+      4
+    ],
+    "3": [
+      4,
+      0
+    ],
+    "4": [
+      4,
+      1
+    ]
+  }
+}

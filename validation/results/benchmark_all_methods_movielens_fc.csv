@@ -1,0 +1,4 @@
+target_size,n_users,n_items,method_id,label,scope,time_s,objective,feasible_users,all_feasible,total_violations,ratio_vs_fastest,objective_gap_vs_csp,slower_than_csp
+1600,40,120,C6,Exhaustive search on bounded pool,per-user,0.285222,85.27626,40,True,0,72.7979,-0.0,True
+1600,40,120,S2,Top-N + local heuristic repair,per-user,0.003918,87.614649,21,False,19,1.0,-2.338389,False
+1600,40,120,S4,CSP / CPMpy (reference),global,0.154689,85.27626,40,True,0,39.4816,-0.0,False

@@ -175,12 +175,12 @@ def render_sidebar() -> dict:
 
     st.sidebar.subheader("Approche de sélection")
     approach = st.sidebar.selectbox(
-        "Scénario",
+        "Algorithme",
         options=list(APPROACHES.keys()),
-        format_func=lambda k: f"{k} — {APPROACHES[k]}",
+        format_func=lambda k: APPROACHES[k],
     )
-    diversity_weight = st.sidebar.slider("λ diversité (S3)", 0.0, 2.0, 0.5, step=0.1)
-    solver = st.sidebar.selectbox("Solveur CPMpy (S4)", ["ortools"], index=0)
+    diversity_weight = st.sidebar.slider("λ diversité (Hybride glouton)", 0.0, 2.0, 0.5, step=0.1)
+    solver = st.sidebar.selectbox("Solveur CPMpy", ["ortools"], index=0)
 
     st.sidebar.subheader("Périmètre utilisateurs")
     scope = st.sidebar.radio("Exécuter pour", ["Un utilisateur", "N premiers", "Tous"])
@@ -191,10 +191,10 @@ def render_sidebar() -> dict:
         n_users = st.sidebar.slider("Nombre d'utilisateurs", 1, 50, 5)
         user_scope = ("first_n", n_users)
     else:
-        st.sidebar.warning("Tous les utilisateurs peut être lent en S4.")
+        st.sidebar.warning("Tous les utilisateurs peut être lent en CPMpy.")
         user_scope = ("all", None)
 
-    st.sidebar.subheader("Contraintes (S2 / S4)")
+    st.sidebar.subheader("Contraintes (Heuristique / CPMpy)")
     st.session_state["use_category_constraint"] = st.sidebar.checkbox("Quota catégories", value=False)
     if st.session_state["use_category_constraint"]:
         st.session_state["category_min"] = st.sidebar.number_input("Min / catégorie / user", 0, 10, 0)
@@ -205,7 +205,7 @@ def render_sidebar() -> dict:
         st.session_state["provider_min"] = st.sidebar.number_input("Min / fournisseur (global)", 0, 100, 0)
         st.session_state["provider_max"] = st.sidebar.number_input("Max / fournisseur (global)", 1, 500, 200)
 
-    st.session_state["use_explanation"] = st.sidebar.checkbox("Support explicatif (S4)", value=False)
+    st.session_state["use_explanation"] = st.sidebar.checkbox("Support explicatif (CPMpy)", value=False)
     if st.session_state["use_explanation"]:
         st.session_state["explanation_min"] = st.sidebar.number_input("explanation_min", 0, 5, 1)
         st.session_state["support_threshold"] = st.sidebar.number_input(
@@ -219,6 +219,9 @@ def render_sidebar() -> dict:
     )
 
     u_item_path = st.sidebar.text_input("u.item (genres MovieLens)", str(DEFAULT_U_ITEM))
+
+    st.sidebar.subheader("Affichage")
+    show_objective = st.sidebar.checkbox("Afficher l'objectif", value=True)
 
     return {
         "uploaded": uploaded,
@@ -234,6 +237,7 @@ def render_sidebar() -> dict:
         "solver": solver,
         "user_scope": user_scope,
         "u_item_path": Path(u_item_path),
+        "show_objective": show_objective,
     }
 
 
@@ -262,14 +266,14 @@ def main() -> None:
 
     st.title("Recommandation Top-N sous contraintes")
     st.caption(
-        "Pipeline R → W → R̂ → C_u → sélection (S1–S4) · MovieLens 100K · CPMpy / OR-Tools"
+        "Pipeline R → W → R̂ → C_u → sélection · MovieLens 100K · CPMpy / OR-Tools"
     )
 
     cfg = render_sidebar()
 
     col_run, col_cmp = st.columns(2)
     run_clicked = col_run.button("Lancer la recommandation", type="primary", use_container_width=True)
-    cmp_clicked = col_cmp.button("Comparer S1–S4 (même périmètre)", use_container_width=True)
+    cmp_clicked = col_cmp.button("Comparer les algorithmes (même périmètre)", use_container_width=True)
 
     if run_clicked or cmp_clicked:
         try:
@@ -288,9 +292,9 @@ def main() -> None:
 
             if cmp_clicked:
                 results = {}
-                progress = st.progress(0.0, text="Comparaison des scénarios…")
+                progress = st.progress(0.0, text="Comparaison des algorithmes…")
                 for i, approach in enumerate(["S1", "S2", "S3", "S4"]):
-                    progress.progress((i + 1) / 4, text=f"Exécution {approach}…")
+                    progress.progress((i + 1) / 4, text=f"Exécution de {APPROACHES[approach]}…")
                     results[approach] = run_full_pipeline(
                         R=R,
                         method=cfg["method"],
@@ -309,9 +313,10 @@ def main() -> None:
                 progress.empty()
                 st.session_state["comparison_results"] = results
                 st.session_state["last_result"] = results[cfg["approach"]]
-                st.success("Comparaison S1–S4 terminée.")
+                st.success("Comparaison des algorithmes terminée.")
             else:
-                with st.spinner(f"Exécution {cfg['approach']}…"):
+                algo_name = APPROACHES.get(cfg["approach"], cfg["approach"])
+                with st.spinner(f"Exécution de « {algo_name} »…"):
                     result = run_full_pipeline(
                         R=R,
                         method=cfg["method"],
@@ -330,12 +335,14 @@ def main() -> None:
                 st.session_state["last_result"] = result
                 st.session_state["comparison_results"] = None
                 if result["status"]:
-                    st.success(
-                        f"{cfg['approach']} terminé en {result['elapsed_s']:.2f}s · "
-                        f"objectif = {result.get('objective')}"
+                    obj_str = (
+                        f" · objectif = {result.get('objective'):.3f}"
+                        if cfg["show_objective"] and result.get("objective") is not None
+                        else ""
                     )
+                    st.success(f"« {algo_name} » terminé en {result['elapsed_s']:.2f}s{obj_str}")
                 else:
-                    st.error("Aucune solution faisable avec ces contraintes (S4).")
+                    st.error("Aucune solution faisable avec ces contraintes.")
 
         except Exception as exc:
             st.error(f"Erreur : {exc}")
@@ -348,16 +355,24 @@ def main() -> None:
     user_ids = st.session_state.get("user_ids")
     item_ids = st.session_state.get("item_ids")
     metadata = st.session_state.get("metadata")
+    show_objective = cfg["show_objective"]
 
     with tab_rec:
         if result is None or user_ids is None:
             st.info("Configurez les paramètres dans la barre latérale, puis lancez une exécution.")
         else:
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Approche", result.get("approach", "—"))
-            c2.metric("Temps (s)", f"{result.get('elapsed_s', 0):.2f}")
-            c3.metric("Faisable", "Oui" if result.get("status") else "Non")
-            c4.metric("Objectif", f"{result.get('objective', 0):.3f}" if result.get("objective") else "—")
+            algo_label = APPROACHES.get(result.get("approach"), result.get("approach", "—"))
+            if show_objective:
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Algorithme", algo_label)
+                c2.metric("Temps (s)", f"{result.get('elapsed_s', 0):.2f}")
+                c3.metric("Faisable", "Oui" if result.get("status") else "Non")
+                c4.metric("Objectif", f"{result.get('objective', 0):.3f}" if result.get("objective") is not None else "—")
+            else:
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Algorithme", algo_label)
+                c2.metric("Temps (s)", f"{result.get('elapsed_s', 0):.2f}")
+                c3.metric("Faisable", "Oui" if result.get("status") else "Non")
 
             rec_users = sorted(result["recommendations"].keys())
             if not rec_users:
@@ -409,7 +424,7 @@ def main() -> None:
     with tab_cmp:
         comparison = st.session_state.get("comparison_results")
         if not comparison:
-            st.info("Cliquez sur « Comparer S1–S4 » pour afficher un tableau comparatif.")
+            st.info("Cliquez sur « Comparer les algorithmes » pour afficher un tableau comparatif.")
         else:
             rows = []
             u = next(iter(comparison["S1"]["recommendations"]))
@@ -421,25 +436,27 @@ def main() -> None:
                     metadata["item_categories"],
                     metadata["genre_matrix"],
                 )
-                rows.append(
-                    {
-                        "Scénario": approach,
-                        "Libellé": APPROACHES[approach],
-                        "Faisable": res["status"],
-                        "Temps (s)": round(res["elapsed_s"], 3),
-                        "Score moyen": round(m["score_mean"], 4),
-                        "ILD": round(m["ild"], 3),
-                        "Catégories": m["n_categories"],
-                        "Items": m["count"],
-                    }
-                )
+                row = {
+                    "Algorithme": APPROACHES[approach],
+                    "Faisable": "Oui" if res["status"] else "Non",
+                    "Temps (s)": round(res["elapsed_s"], 3),
+                }
+                if show_objective:
+                    row["Objectif"] = round(res.get("objective"), 3) if res.get("objective") is not None else "—"
+                row.update({
+                    "Score moyen": round(m["score_mean"], 4),
+                    "ILD": round(m["ild"], 3),
+                    "Catégories": m["n_categories"],
+                    "Items": m["count"],
+                })
+                rows.append(row)
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
             st.subheader("Listes recommandées (premier utilisateur du périmètre)")
             for approach, res in comparison.items():
                 slate = res["recommendations"].get(u, [])
                 ids = [int(item_ids[i]) for i in slate]
-                st.markdown(f"**{approach}** — {', '.join(map(str, ids)) or '∅'}")
+                st.markdown(f"**{APPROACHES[approach]}** — {', '.join(map(str, ids)) or '∅'}")
 
     with tab_data:
         if user_ids is None:
@@ -473,17 +490,16 @@ def main() -> None:
     with tab_about:
         st.markdown(
             """
-            ### Goal
-            This interface tests the **R → W → R_hat → C_u → Top-N**
-            pipeline from the thesis without editing Python code directly.
+            ### Objectif
+            Cette interface teste le pipeline **R → W → R̂ → C_u → sélection** de la thèse.
 
-            ### Scenarios
-            - **S1** : score-based ranking (baseline)
-            - **S2** : local heuristic constraint repair
-            - **S3** : greedy relevance + diversity (λ)
-            - **S4** : CPMpy optimization under declarative constraints
+            ### Algorithmes
+            - **Top-N classique (baseline)** : classement par score décroissant
+            - **Post-traitement heuristique** : réparation locale des contraintes
+            - **Hybride glouton (pertinence + diversité)** : sélection gloutonne (λ)
+            - **CPMpy — approche proposée** : optimisation sous contraintes déclaratives
 
-            ### Local run
+            ### Exécution locale
             ```bash
             cd codes
             pip install -r requirements.txt
@@ -495,3 +511,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

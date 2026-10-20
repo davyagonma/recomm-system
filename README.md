@@ -113,7 +113,7 @@ R_hat = R @ W
 `R_hat[u, i]` is the predicted score of item `i` for user `u`.
 
 Note: with the SVD method, scores can be negative because the matrix is centered before decomposition. This is not necessarily an error, but it can affect the CP objective.
-
+VV
 ### 5. Candidate sets `Cu`
 
 For each user `u`, a candidate set `Cu[u]` is built from the best scores in `R_hat`.

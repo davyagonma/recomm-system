@@ -2,6 +2,7 @@ import argparse
 import builtins
 import csv
 from pathlib import Path
+import time
 
 import cpmpy as cp
 import numpy as np
@@ -140,7 +141,8 @@ def solve_cp_recommendations(
 
     objective = cp.sum(float(R_hat[u, i]) * var for (u, i), var in x_ui.items())
 
-    model = cp.Model(constraints, maximize=objective)
+    # model = cp.Model(constraints, maximize=objective)
+    model = cp.Model(constraints)
     solver = cp.SolverLookup.get(solver_name, model)
     status = solver.solve()
 
@@ -269,7 +271,7 @@ def main() -> None:
         f"method={args.method}, slate_size={args.slate_size}, "
         f"n_candidates={args.n_candidates}"
     )
-
+    start_time = time.perf_counter()
     result = recommend_complete(
         R=R,
         method=args.method,
@@ -284,7 +286,8 @@ def main() -> None:
     if not result["status"]:
         print("No feasible solution found with these constraints.")
         return
-
+    elapsed_time = time.perf_counter() - start_time
+    
     save_recommendations_csv(args.output, result, user_ids, item_ids)
     total_recommendations = sum(len(items) for items in result["recommendations"].values())
 
@@ -295,7 +298,8 @@ def main() -> None:
     first_items = result["recommendations"].get(first_user, [])
     preview = [str(item_ids[item_index]) for item_index in first_items]
     print(f"Preview user {int(user_ids[first_user])}: {preview}")
-
+    print(f"Temps d'exécution : {elapsed_time:.6f} secondes")
+    
 
 if __name__ == "__main__":
     main()

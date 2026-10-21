@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from uniform import compute_R_hat, W_collaborative_filtering, W_svd
+from streamlit_app.metadata import build_item_metadata
 
 
 def load_pivot_csv(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -124,6 +125,8 @@ def solve_cp_recommendations(
     Cu: list[np.ndarray],
     slate_size: int,
     Hu: np.ndarray | None = None,
+    item_categories: np.ndarray | None = None,
+    category_bounds: tuple[int | None, int | None] | None = None,
     solver_name: str = "ortools",
 ):
     """Solve the CP model and return recommendations."""
@@ -143,6 +146,21 @@ def solve_cp_recommendations(
     for u in range(n_users):
         user_vars = [x_ui[(u, int(i))] for i in Cu[u]]
         constraints.append(cp.sum(user_vars) == slate_size)
+
+    if item_categories is not None and category_bounds is not None:
+        item_categories = np.asarray(item_categories)
+        lower, upper = category_bounds
+        for u in range(n_users):
+            for category in np.unique(item_categories):
+                category_vars = [
+                    x_ui[(u, int(i))]
+                    for i in Cu[u]
+                    if item_categories[int(i)] == category
+                ]
+                if lower is not None:
+                    constraints.append(cp.sum(category_vars) >= lower)
+                if upper is not None:
+                    constraints.append(cp.sum(category_vars) <= upper)
 
     objective = cp.sum(float(R_hat[u, i]) * var for (u, i), var in x_ui.items())
 
@@ -192,6 +210,8 @@ def recommend_complete(
     Hu: np.ndarray | None = None,
     exclude_consumed: bool = True,
     min_score: float | None = None,
+    item_categories: np.ndarray | None = None,
+    category_bounds: tuple[int | None, int | None] | None = None,
     solver_name: str = "ortools",
 ):
     """Full pipeline: R -> W -> R_hat -> Cu -> CP model."""
@@ -217,6 +237,8 @@ def recommend_complete(
         Cu=Cu,
         slate_size=slate_size,
         Hu=Hu,
+        item_categories=item_categories,
+        category_bounds=category_bounds,
         solver_name=solver_name,
     )
 
@@ -231,6 +253,9 @@ def parse_args() -> argparse.Namespace:
         default="recommendations_algos1.csv",
         help="Recommendations CSV file to produce",
     )
+    parser.add_argument("--u-item", default="u.item", help="Fichier MovieLens des catégories")
+    parser.add_argument("--category-min", type=int, default=0)
+    parser.add_argument("--category-max", type=int, default=None)
     parser.add_argument(
         "--method",
         default="svd",
@@ -268,6 +293,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     user_ids, item_ids, R = load_pivot_csv(args.input)
+    metadata = build_item_metadata(item_ids, args.u_item)
+    category_bounds = (args.category_min, args.category_max)
 
     print(f"Matrix loaded: {R.shape[0]} users x {R.shape[1]} items")
     print(
@@ -285,6 +312,8 @@ def main() -> None:
         n_candidates=args.n_candidates,
         exclude_consumed=not args.include_consumed,
         min_score=args.min_score,
+        item_categories=metadata["item_categories"],
+        category_bounds=category_bounds,
         solver_name=args.solver,
     )
     elapsed_time = time.perf_counter() - start_time

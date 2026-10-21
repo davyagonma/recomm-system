@@ -1,10 +1,17 @@
 import argparse
 import csv
+import sys
 import time
 from pathlib import Path
 
 import cpmpy as cp
 import numpy as np
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from streamlit_app.metadata import build_item_metadata
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -190,6 +197,23 @@ def parse_pair(value: str) -> tuple[int, int]:
         ) from error
 
 
+def resolve_pairs(
+    pairs: list[tuple[int, int]],
+    item_labels: np.ndarray,
+) -> list[tuple[int, int]]:
+    """Convert item identifiers from the CLI into matrix column indices."""
+    positions = {int(label): index for index, label in enumerate(item_labels)}
+    resolved = []
+    for first, second in pairs:
+        if first not in positions or second not in positions:
+            raise ValueError(
+                f"Paire inconnue: {first}:{second}. "
+                "Les identifiants doivent exister dans l'en-tête du CSV."
+            )
+        resolved.append((positions[first], positions[second]))
+    return resolved
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Compare les recommandations FC et CSP avec parité."
@@ -222,6 +246,13 @@ def parse_args() -> argparse.Namespace:
         help="Paire d'indices d'items interdite; peut être répétée.",
     )
     parser.add_argument("--max-items-per-genre", type=int, default=1)
+    parser.add_argument("--u-item", type=Path, default=Path("u.item"))
+    parser.add_argument(
+        "--category-max",
+        type=int,
+        default=None,
+        help="Maximum d'items par catégorie pour le CSV.",
+    )
     return parser.parse_args()
 
 
@@ -264,13 +295,22 @@ def main() -> None:
                 )
             user_id = int(matching_users[0])
         forbidden_pairs = args.forbidden_pair
-        item_genres = {}
+        metadata = build_item_metadata(item_labels, args.u_item)
+        item_genres = {
+            item: str(category)
+            for item, category in enumerate(metadata["item_categories"])
+        }
 
+    forbidden_pairs = resolve_pairs(forbidden_pairs, item_labels)
     max_candidates = args.max_candidates
     if args.top_n < 1 or args.k < 1 or args.max_items_per_genre < 1:
         raise ValueError("top-n, k et max-items-per-genre doivent être positifs.")
     if max_candidates is not None and max_candidates < args.top_n:
         raise ValueError("max-candidates doit être au moins égal à top-n.")
+    if args.category_max is not None and args.category_max < 0:
+        raise ValueError("category-max doit être positif ou nul.")
+    if args.csv is not None and args.category_max is not None:
+        args.max_items_per_genre = args.category_max
 
     start_time = time.perf_counter()
     similarity = item_similarity_matrix(R)

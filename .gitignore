@@ -5,6 +5,5 @@ agent.log
 streamlit_app/__pycache__
 validation/HEURISTICS_S1_S8.md
 .codex
-exercices
-streamlit_app
-validation
+exercices/**
+validation/**

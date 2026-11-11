@@ -1,5 +1,7 @@
 # Tests — protocole d’évaluation
 
+**Cas de test T1–T6 (limites du classique) et installation :** [README](../README.md#test-cases--limits-of-the-classical-algorithm).
+
 Ce dossier compare **deux sélecteurs** sur les mêmes scores (ou la même matrice `R` / `R̂`).
 
 | Méthode | Idée |

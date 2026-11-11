@@ -1,419 +1,197 @@
 # Constraint-based Recommendation System
 
-This project implements a recommendation pipeline combining:
+Operator-based scores **R̂ = R W** (collaborative filtering or latent factors), then **Top-N selection** under business rules. The research focus is the contrast between:
 
-- a user-item matrix `R`;
-- a weight matrix `W` built either by collaborative filtering or by latent factors;
-- a reconstructed score matrix `R_hat = R @ W`;
-- a constraint programming model with `CPMpy` to produce feasible recommendations under constraints.
+- **Classical greedy Top-N / FC** — scan candidates by score and skip items that violate constraints locally;
+- **CSP (CPMpy + OR-Tools)** — optimize total score subject to **hard** constraints (feasible solution or explicit infeasibility).
 
-The goal is not simply to recommend the highest-scoring items, but to produce recommendation lists that satisfy constraints such as list size, diversity, category balance, provider exposure, and explanatory support.
+---
 
-## Project Structure
+## Quick start
+
+**Requirements:** Python 3.10+, virtual environment recommended.
+
+```bash
+cd codes
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+Use `setuptools>=65,<81` (pinned in `requirements.txt`) so CPMpy can import `pkg_resources`.
+
+```bash
+# Syntax check
+.venv/bin/python -m py_compile recomm/pipeline.py recomm/operators.py streamlit_app/app.py
+
+# Batch CSP on MovieLens pivot
+.venv/bin/python -m recomm.pipeline --input u_data_pivot.csv --method svd --slate-size 5
+
+# Classical vs CSP (toy matrix, instant)
+.venv/bin/python test/simple_csp_with_parity.py
+
+# Interactive comparison (same protocol as tests)
+.venv/bin/streamlit run streamlit_app/app.py
+```
+
+---
+
+## Repository layout
 
 | Path | Role |
 | --- | --- |
-| `recomm/operators.py` | Build `W` (FC / SVD) and compute `R_hat = R @ W`. |
-| `recomm/pipeline.py` | **Main pipeline**: candidates `Cu`, CP model (CPMpy), CSV I/O, CLI (`python -m recomm.pipeline`). |
-| `recomm/legacy_pipeline.py` | First pipeline iteration (reference only). |
-| `recomm/scoring_baseline.py` | Scoring + CP without extended constraints (benchmarks). |
-| `streamlit_app/` | **Classical vs CSP** demo (3 scenarios × 2 methods, same as `test/`). |
-| `recomm/evaluation.py` | Shared evaluation protocol (used by Streamlit). |
-| `examples/` | Standalone pedagogical scripts (cosine CF, latent factors). |
-| `test/` | Parity and timing on toy matrices and MovieLens. See [test/README.md](test/README.md). |
-| `exercices/` | CPMpy / OR-Tools / MiniZinc learning demos. |
-| `model/` | Archived experiment outputs (CSVs, figures). See [model/README.md](model/README.md). |
-| `scripts/build_pivot_from_udata.py` | Rebuild `u_data_pivot.csv` from `u.data`. |
-| `u.data`, `u_data_pivot.csv`, `u.item` | MovieLens 100k data. |
+| `recomm/operators.py` | Build `W` (FC / SVD), compute `R_hat = R @ W`. |
+| `recomm/pipeline.py` | Candidates `Cu`, CP model, CLI (`python -m recomm.pipeline`). |
+| `recomm/evaluation.py` | **Evaluation protocol** — classical vs CSP, three scenarios (Streamlit + tests). |
+| `recomm/constraints.py` | Constraint config and violation checks. |
+| `recomm/legacy_pipeline.py`, `recomm/scoring_baseline.py` | Older / baseline variants. |
+| `streamlit_app/` | Demo: 3 scenarios × 2 methods on one user. |
+| `test/` | Reproducible benchmarks — see [test/README.md](test/README.md). |
+| `examples/` | Standalone CF / latent-factor examples. |
+| `scripts/build_pivot_from_udata.py` | Regenerate `u_data_pivot.csv` from `u.data`. |
+| `model/` | Archived CSV/plots only — not source code. |
+| `docs/catalogue_contraintes_globales.md` | Reference table of global CP constraints (French). |
 
-## General Pipeline
+**Data (MovieLens 100k, included):** `u.data`, `u_data_pivot.csv` (**943 × 1682**), `u.item` (genres).
 
-The main pipeline is implemented in `recomm/pipeline.py`:
-
-```text
-R -> W -> R_hat -> Cu -> CP model -> recommendations
+```bash
+.venv/bin/python scripts/build_pivot_from_udata.py   # rebuild pivot if needed
 ```
 
-### 1. User-item matrix `R`
+Optional: `curl -o u.item https://files.grouplens.org/datasets/movielens/ml-100k/u.item`
 
-`R` is a matrix of size `n_users x n_items`.
+---
 
-```python
-R[u, i] = rating  # rating given by user u for item i; 0 if missing
-```
+## Evaluation methodology
 
-Example:
+Only **two selectors** are compared (no multi-heuristic S1–S4 grid).
 
-```python
-R = np.array([
-    [5, 3, 0, 1, 0, 0],
-    [4, 2, 1, 0, 0, 0],
-    [1, 0, 5, 4, 0, 0],
-    [0, 4, 4, 5, 0, 0],
-], dtype=float)
-```
-
-### 2. User history `Hu`
-
-`Hu` is a binary matrix built from `R`.
-
-```python
-Hu[u, i] = 1  # if user u has already consumed or rated item i
-Hu[u, i] = 0  # otherwise
-```
-
-In the pipeline module, it is built by:
-
-```python
-Hu = (R > 0).astype(int)
-```
-
-### 3. Building `W`
-
-The matrix `W` (`n_items x n_items`) represents relationships between items. Two methods are available.
-
-#### Method `fc`: collaborative filtering
-
-This method uses item-item co-occurrence:
-
-```text
-C = R.T @ R
-W = D^-1 C D^-1
-```
-
-```python
-method="fc"
-```
-
-#### Method `fl` / `svd`: latent factors
-
-This method uses a truncated SVD to project items into a latent space:
-
-```text
-R_centered ≈ U Σ Vᵀ
-Q = Vᵀ_k.T
-W = Q @ Q.T
-```
-
-```python
-method="fl"   # or method="svd"
-```
-
-The parameter `k` controls the number of latent factors (ignored with `method="fc"`).
-
-- small `k`: compact representation, more general recommendations;
-- large `k`: detailed representation, but potentially more sensitive to noise;
-- `k` does not change the number of recommendations produced, only how `W` is built in SVD.
-
-### 4. Reconstructed scores `R_hat`
-
-Once `W` is obtained, recommendation scores are computed with:
-
-```python
-R_hat = R @ W
-```
-
-`R_hat[u, i]` is the predicted score of item `i` for user `u`.
-
-Note: with the SVD method, scores can be negative because the matrix is centered before decomposition. This is not necessarily an error, but it can affect the CP objective.
-
-### 5. Candidate sets `Cu`
-
-For each user `u`, a candidate set `Cu[u]` is built from the best scores in `R_hat`.
-
-Selection steps:
-
-1. Compute all scores `R_hat[u, i]`;
-2. Remove already consumed items if `exclude_consumed=True`;
-3. Remove items below `min_score` if this parameter is set;
-4. Sort remaining items by descending score;
-5. Keep the top `n_candidates`.
-
-| Parameter | Role |
+| Method | Behaviour |
 | --- | --- |
-| `n_candidates` | Maximum number of candidates kept per user. |
-| `exclude_consumed` | If `True`, already consumed items are excluded. |
-| `min_score` | Minimum score to accept a candidate item. |
+| **Classical** | Greedy FC-style pass over sorted candidates (`test/simple_csp_with_parity.recommend_fc` logic in `recomm/evaluation.py`). |
+| **CSP** | CPMpy model on the same scores / same `R̂` and candidate pool. |
 
-`n_candidates` is not the final number of recommendations. It only limits how many items the CP model may consider per user. The final count is given by `slate_size`.
+**Three scenarios** (progression used in the thesis experiments):
 
-Example:
+| # | Scenario | Classical | CSP |
+| --- | --- | --- | --- |
+| 1 | Simple | Top-N by score | Cardinality only |
+| 2 | With parity | + forbidden pairs | + forbidden pairs |
+| 3 | Two constraints | + pairs + genre/category cap | + pairs + genre cap |
 
-```python
-Cu = build_candidate_sets(
-    R_hat=R_hat,
-    Hu=Hu,
-    n_candidates=5,
-    exclude_consumed=True,
-    min_score=0,
-)
-```
+**Metrics:** execution **time**, **completeness** (full slate of size *N*), **constraint satisfaction**, **score sum**, CSP **feasibility**.
 
-## CP Model
+**Scripts:**
 
-The CP model selects binary variables:
-
-```text
-x_ui = 1  if item i is recommended to user u
-x_ui = 0  otherwise
-```
-
-The objective is to maximize the sum of scores of selected items:
-
-```text
-max sum(R_hat[u, i] * x_ui)
-```
-
-The model is solved with `CPMpy` and the `ortools` solver by default.
-
-## Available Constraints
-
-### Cardinality
-
-Each user receives exactly `slate_size` recommendations.
-
-```python
-slate_size=3
-```
-
-### Category balance
-
-If items have categories, a minimum and maximum number of items per category can be imposed.
-
-```python
-item_categories = np.array([0, 0, 1, 1, 2, 2])
-category_bounds = (0, 1)
-```
-
-Here, each category can appear between 0 and 1 times in a user's list.
-
-Per-category bounds can also be specified:
-
-```python
-category_bounds = {
-    0: (1, 2),
-    1: (0, 1),
-    2: (0, 1),
-}
-```
-
-### Diversity — forbidden pairs
-
-Certain pairs of items can be forbidden from appearing together.
-
-```python
-forbidden_pairs = [(0, 1), (2, 3)]
-# imposes: x_u0 + x_u1 <= 1  for each user
-```
-
-### Provider exposure
-
-If items belong to providers, global exposure of each provider across all users can be bounded.
-
-```python
-item_providers = np.array([0, 1, 0, 1, 0, 1])
-provider_bounds = (1, 6)
-```
-
-Here, each provider must appear at least 1 time and at most 6 times across all recommendations.
-
-Per-provider bounds can also be specified:
-
-```python
-provider_bounds = {
-    0: (2, 5),
-    1: (1, 4),
-}
-```
-
-### Explanatory support
-
-Explanatory support forces each recommendation to be justified by already consumed items.
-
-```text
-y_uij = 1  if history item j supports the recommendation of item i for user u
-```
-
-The link between `j` and `i` is accepted if:
-
-```python
-abs(W[j, i]) > support_threshold
-```
-
-| Parameter | Role |
+| Script | Purpose |
 | --- | --- |
-| `explanation_min` | Minimum number of history items that must support each recommendation. |
-| `support_threshold` | Minimum threshold to consider the link `W[j, i]` strong enough. |
+| `test/simple_csp_with_parity.py` | Side-by-side **FC greedy vs simple CSP** (toy 4×8 or `--csv`). |
+| `test/fc_with_parity.py` | Classical only, parity rules. |
+| `test/csp_with_parity.py` | Full **R → W → R̂ → Cu → CP** on MovieLens with category bounds. |
 
-Example:
+**Streamlit:** loads the full pivot (**943 × 1682**), but each run builds `W` and `R̂` on the whole matrix, then compares **one** `user_id` with at most **`n_candidates`** (default 50) and **`slate_size`** (default 5). CSP solves a **single-user** model. First SVD run can take tens of seconds; later interactions reuse the same session until you click **Run full protocol** again.
 
-```python
-explanation_min=1
-support_threshold=0.05
-```
+---
 
-This means: each recommended item must have at least one history item linked with a strength above `0.05`.
+## Test cases — limits of the classical algorithm
 
-If `support_threshold` is too low, explanations will be numerous but unselective. If too high, the model may become infeasible.
+Use these to show when greedy selection **stops short**, **violates** rules, or **misses** feasible high-score slates that CSP can find.
 
-## Running the pipeline (CLI)
+| ID | Intent | Command (from repo root) | What to look for |
+| --- | --- | --- | --- |
+| **T1** | Explainable toy | `.venv/bin/python test/simple_csp_with_parity.py` | User 0, 4×8 matrix, pair (4,6), `max_items_per_genre=1`, `top_n=3`. Classical **incomplete** or **violations**; CSP feasible slate. |
+| **T2** | Parity only (ML) | `.venv/bin/python test/simple_csp_with_parity.py --csv u_data_pivot.csv --user-id 196 --top-n 5 --k 3 --max-candidates 30 --forbidden-pair 50:51` | Top scores blocked by pair; classical may not reach 5 items. |
+| **T3** | Hard genre cap | Add `--max-items-per-genre 1` to **T2** (or `--category-max 1` via CSV path) | Early picks exhaust one genre; classical **Complete = No**; CSP trades score for feasibility. |
+| **T4** | Small candidate pool | Same as T3 with `--max-candidates 6` and `--top-n 5` | Greedy exhausts pool; CSP may report **infeasible** explicitly. |
+| **T5** | Contradictory rules | Toy only: several `--forbidden-pair` among top items + `--max-items-per-genre 1` + high `--top-n` | Classical short slate; CSP **no solution** if constraints cannot be met. |
+| **T6** | Full pipeline CSP | `.venv/bin/python test/csp_with_parity.py --input u_data_pivot.csv --slate-size 5 --n-candidates 20 --category-max 1 --method svd --k 20` | Compare with Streamlit or `recomm/evaluation` for **classical** on same `category_max` and pairs. |
 
-```bash
-python -m recomm.pipeline --help
-```
+**Reading results:** high **score sum** with **Constraints OK = No** means a good ranking that is **not** a valid recommendation list — the main argument for CSP.
 
-### Basic command
+**Suggested demo for a supervisor:** T1 → T3 on user 196 → optional T4.
 
-```bash
-python -m recomm.pipeline --input u_data_pivot.csv --output recommendations.csv
-```
+---
 
-### All arguments
-
-| Argument | Default | Description |
-| --- | --- | --- |
-| `--input` | `u_data_pivot.csv` | Pivot CSV file to load |
-| `--output` | `recommendations.csv` | Output recommendations CSV file |
-| `--method` | `svd` | Method used to build `W`: `fc`, `svd`, or `fl` |
-| `--k` | `20` | Number of latent factors (SVD only) |
-| `--slate-size` | `5` | Number of items to recommend per user |
-| `--n-candidates` | `50` | Maximum number of candidates per user before CP |
-| `--min-score` | `None` | Minimum score in `R_hat` to keep a candidate |
-| `--include-consumed` | *(flag)* | Allow recommending already rated/consumed items |
-| `--explanation-min` | `0` | Minimum number of history items supporting each recommendation |
-| `--support-threshold` | `1e-12` | Support threshold used for explanations |
-| `--solver` | `ortools` | CPMpy solver to use |
-
-### Examples
-
-```bash
-# Collaborative filtering, 3 recommendations per user
-python -m recomm.pipeline --method fc --slate-size 3
-
-# SVD with k=10, up to 50 candidates per user
-python -m recomm.pipeline --method svd --k 10 --slate-size 5 --n-candidates 50
-
-# With minimum score filter and explanatory support
-python -m recomm.pipeline --method svd --min-score 0 --explanation-min 1 --support-threshold 0.05
-
-# Allow already consumed items
-python -m recomm.pipeline --include-consumed --slate-size 5
-```
-
-## Testing `fc` and `svd`
-
-```python
-result_fc  = recommend_complete(R, method="fc",  slate_size=2)
-result_svd = recommend_complete(R, method="svd", k=2, slate_size=2)
-```
-
-If the SVD objective is negative, it may come from the negative scores produced by the latent projection. To avoid recommending items with negative scores:
-
-```python
-result_svd = recommend_complete(
-    R,
-    method="svd",
-    k=2,
-    slate_size=2,
-    min_score=0,
-)
-```
-
-Note: if `min_score=0` removes too many candidates, the CP model may become infeasible.
-
-## Streamlit demo (CSP vs classical)
-
-From the repository root:
+## Streamlit demo
 
 ```bash
 .venv/bin/streamlit run streamlit_app/app.py
 ```
 
-The UI mirrors the **`test/` evaluation protocol** on one user and one shared `R̂ = R W`:
+Click **Run full protocol (3 scenarios × 2 methods)**. Defaults: `user_id=196`, forbidden pair `50,51`, genre cap `2` in scenario 3. Adjust sidebar sliders to replay **T2–T4** without the CLI.
 
-| Scenario | Classical (greedy FC) | CSP (CPMpy) |
+---
+
+## CSP pipeline (CLI)
+
+```bash
+.venv/bin/python -m recomm.pipeline --help
+```
+
+| Argument | Default | Description |
 | --- | --- | --- |
-| 1. Simple | Top-N by score | CP with cardinality only |
-| 2. With parity | Greedy + forbidden pairs | CP + forbidden pairs |
-| 3. Two constraints | Greedy + pairs + genre cap | CP + pairs + genre cap |
+| `--input` | `u_data_pivot.csv` | Pivot CSV (`user_id` + item columns) |
+| `--output` | `recommendations.csv` | Output CSV |
+| `--method` | `svd` | `fc`, `svd`, or `fl` |
+| `--k` | `20` | Latent dimension (SVD) |
+| `--slate-size` | `5` | Items per user |
+| `--n-candidates` | `50` | Max candidates before CP |
+| `--min-score` | — | Drop low `R_hat` candidates |
+| `--explanation-min` | `0` | Explanatory support count |
+| `--support-threshold` | `1e-12` | Support strength in `W` |
+| `--solver` | `ortools` | CPMpy backend |
 
-Reported for each run: **time**, **completeness** (slate of size *N*), **constraint satisfaction**, **score sum**. See [test/README.md](test/README.md).
-
-```bash
-curl -o u.item https://files.grouplens.org/datasets/movielens/ml-100k/u.item
-```
-
-## Installation
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install numpy cpmpy ortools
-# or:
-.venv/bin/pip install -r requirements.txt
-```
-
-Syntax check:
+Examples:
 
 ```bash
-.venv/bin/python -m py_compile recomm/pipeline.py recomm/operators.py streamlit_app/app.py
+.venv/bin/python -m recomm.pipeline --method fc --slate-size 3
+.venv/bin/python -m recomm.pipeline --method svd --k 10 --explanation-min 1 --support-threshold 0.05
 ```
 
-## Interpreting the Output
+---
 
-A typical output looks like:
+## Pipeline overview
 
-```python
-{
-    "status": True,
-    "objective": 0.46,
-    "recommendations": {0: [2, 4], 1: [3, 4]},
-    "explanations": {0: {2: [0, 1], 4: [1]}},
-    "R_hat": ...,
-    "Cu": ...,
-}
+```text
+R  →  W  →  R_hat  →  Cu  →  selection (classical or CP)
 ```
+
+- **R[u,i]** — rating; 0 if missing. **Hu = (R > 0)**.
+- **W** — item-item operator: **FC** (`W = D⁻¹ Rᵀ R D⁻¹`) or **SVD** (`W ≈ Q Qᵀ` on centred `R`).
+- **R_hat = R @ W** — scores per user-item (SVD scores can be negative).
+- **Cu[u]** — top `n_candidates` unscored items for user `u` (optionally exclude consumed / apply `min_score`).
+- **CP** — maximize Σ R_hat[u,i]·x_ui with cardinality, categories, forbidden pairs, providers, explanatory support (see `recomm/pipeline.solve_cp_recommendations`).
+
+### Constraints (summary)
+
+| Constraint | Idea |
+| --- | --- |
+| Cardinality | Exactly `slate_size` items per user |
+| Category bounds | Min/max items per category in a slate |
+| Forbidden pairs | `x_i + x_j ≤ 1` for listed pairs |
+| Provider exposure | Global min/max per provider across users |
+| Explanatory support | Each pick supported by history via `W[j,i]` |
+
+### CLI result object
 
 | Key | Meaning |
 | --- | --- |
-| `status` | `True` if the solver found a feasible solution |
-| `objective` | Optimized sum of selected `R_hat[u, i]` scores |
-| `recommendations` | Recommended items per user |
-| `explanations` | History items supporting each recommendation |
-| `R_hat` | Full predicted score matrix |
-| `Cu` | Candidates considered per user |
+| `status` | CSP found a feasible solution |
+| `objective` | Sum of selected `R_hat` |
+| `recommendations` | Item indices per user |
+| `explanations` | Support items when enabled |
 
-## Common Infeasibility Causes
+**Infeasibility:** tighten constraints incrementally; typical causes are `slate_size` too large vs `Cu`, harsh `category_bounds`, too many `forbidden_pairs`, or aggressive `min_score` / `support_threshold`.
 
-The model may return `status=False` if constraints are too tight. Common causes:
-
-| Cause |
-| --- |
-| `slate_size` exceeds the number of available candidates |
-| `min_score` filters out too many items |
-| `category_bounds` requires categories absent from candidates |
-| `provider_bounds` imposes an impossible exposure |
-| `support_threshold` is too high |
-| `explanation_min` requires too many history support items |
-| `forbidden_pairs` forbids too many combinations |
-
-To debug: start with no constraints, then add them incrementally.
-
-## Mathematical Formulation
+### Compact formulation
 
 ```text
-U = {1, ..., m}    # users
-I = {1, ..., n}    # items
-
-R  ∈ ℝ^(m×n)      # observed matrix
-R̂  = R W          # reconstructed scores
-
-x_ui ∈ {0, 1}     # decision variable
-
-max  Σ_u Σ_i R̂[u,i] · x_ui
-s.t. Σ_i x_ui = N              (cardinality)
-     Σ_j y_uij ≥ K · x_ui      (explanatory support)
-     y_uij ≤ x_ui
-     abs(W[j,i]) > support_threshold  → j is a valid support for i
+max Σ_u Σ_i R̂[u,i] · x_ui
+s.t. Σ_i x_ui = N
+     (+ category, pairs, provider, support constraints as configured)
 ```
 
+---
 
+## Remote
+
+GitHub: [github.com/davyagonma/recomm-system](https://github.com/davyagonma/recomm-system)

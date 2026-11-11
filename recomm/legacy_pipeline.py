@@ -1,7 +1,7 @@
 import numpy as np
 import cpmpy as cp
 
-from uniform import compute_R_hat, W_collaborative_filtering, W_svd
+from recomm.operators import compute_R_hat, W_collaborative_filtering, W_svd
 
 
 def build_history(R: np.ndarray) -> np.ndarray:

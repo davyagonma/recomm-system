@@ -1,81 +1,23 @@
-"""Top-N selection strategies S1 to S4 (thesis chapter 3)."""
+"""Legacy S1–S4 selectors (thesis); use ``recomm.evaluation`` for classical vs CSP."""
 
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 
-from algos1 import recommend_complete, solve_cp_recommendations
-
-
-@dataclass
-class ConstraintConfig:
-    """Constraint parameters shared by S2, S3, and S4."""
-
-    item_categories: np.ndarray | None = None
-    category_min: int | None = None
-    category_max: int | None = None
-    forbidden_pairs: list[tuple[int, int]] = field(default_factory=list)
-    item_providers: np.ndarray | None = None
-    provider_min: int | None = None
-    provider_max: int | None = None
-    explanation_min: int = 0
-    support_threshold: float = 1e-12
-
-    def category_bounds(self):
-        """Return (min, max) per-category bounds, or None if unset."""
-        if self.category_min is None and self.category_max is None:
-            return None
-        return (self.category_min, self.category_max)
-
-    def provider_bounds(self):
-        """Return (min, max) global provider exposure bounds, or None if unset."""
-        if self.provider_min is None and self.provider_max is None:
-            return None
-        return (self.provider_min, self.provider_max)
-
+from recomm.constraints import ConstraintConfig, constraint_violations
+from recomm.pipeline import solve_cp_recommendations
 
 def _violations(
     selected: list[int],
     constraints: ConstraintConfig,
     global_provider_counts: dict[int, int] | None = None,
 ) -> list[str]:
-    """List constraint violations triggered by a slate."""
-    issues: list[str] = []
-
-    if constraints.item_categories is not None:
-        lb, ub = constraints.category_bounds() or (None, None)
-        if lb is not None or ub is not None:
-            counts: dict[int, int] = {}
-            for item in selected:
-                cat = int(constraints.item_categories[item])
-                counts[cat] = counts.get(cat, 0) + 1
-            for cat, count in counts.items():
-                if lb is not None and count < lb:
-                    issues.append(f"category_min:{cat}")
-                if ub is not None and count > ub:
-                    issues.append(f"category_max:{cat}")
-
-    for i, j in constraints.forbidden_pairs:
-        if i in selected and j in selected:
-            issues.append(f"pair:{i},{j}")
-
-    if (
-        constraints.item_providers is not None
-        and global_provider_counts is not None
-        and (constraints.provider_min is not None or constraints.provider_max is not None)
-    ):
-        lb, ub = constraints.provider_bounds() or (None, None)
-        for provider, count in global_provider_counts.items():
-            if lb is not None and count < lb:
-                issues.append(f"provider_min:{provider}")
-            if ub is not None and count > ub:
-                issues.append(f"provider_max:{provider}")
-
-    return issues
+    return constraint_violations(
+        selected, constraints, global_provider_counts=global_provider_counts
+    )
 
 
 def _score_sum(selected: list[int], scores: np.ndarray) -> float:
@@ -336,8 +278,8 @@ def run_full_pipeline(
     genre_matrix: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Full pipeline: R → W → R_hat → Cu → selection."""
-    from algos1 import build_candidate_sets, build_history, build_W
-    from uniform import compute_R_hat
+    from recomm.operators import compute_R_hat
+    from recomm.pipeline import build_candidate_sets, build_history, build_W
 
     constraints = constraints or ConstraintConfig()
     R = np.asarray(R, dtype=float)

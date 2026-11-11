@@ -11,20 +11,24 @@ The goal is not simply to recommend the highest-scoring items, but to produce re
 
 ## Project Structure
 
-| File | Role |
+| Path | Role |
 | --- | --- |
-| `uniform.py` | Common functions to build `W` and compute `R_hat = R @ W`. |
-| `algos1.py` | Main pipeline: builds `W`, `R_hat`, candidate sets `Cu`, then solves the CP model. |
-| `algos.py` | First version of the pipeline. `algos1.py` is the revised and corrected version. |
-| `fc_with_cos.py` | Separate example of collaborative filtering with cosine similarity. |
-| `facteur_latent.py` | Separate example of latent factor / SVD recommendation. |
-| `u_data_pivot.csv` | Pivoted user-item matrix: first column `user_id`, then one column per item. |
-| `exercices/` | Usage examples for solvers and constraint models. |
-| `test/` | COntains two scripts for testing fc and csp with parity on 5x5 matrices and 943x1682 matrices to compare running time and effectiveness. After it I try to add another constraint (categories bound) and do the same evaluations. |
+| `recomm/operators.py` | Build `W` (FC / SVD) and compute `R_hat = R @ W`. |
+| `recomm/pipeline.py` | **Main pipeline**: candidates `Cu`, CP model (CPMpy), CSV I/O, CLI (`python -m recomm.pipeline`). |
+| `recomm/legacy_pipeline.py` | First pipeline iteration (reference only). |
+| `recomm/scoring_baseline.py` | Scoring + CP without extended constraints (benchmarks). |
+| `streamlit_app/` | **Classical vs CSP** demo (3 scenarios × 2 methods, same as `test/`). |
+| `recomm/evaluation.py` | Shared evaluation protocol (used by Streamlit). |
+| `examples/` | Standalone pedagogical scripts (cosine CF, latent factors). |
+| `test/` | Parity and timing on toy matrices and MovieLens. See [test/README.md](test/README.md). |
+| `exercices/` | CPMpy / OR-Tools / MiniZinc learning demos. |
+| `model/` | Archived experiment outputs (CSVs, figures). See [model/README.md](model/README.md). |
+| `scripts/build_pivot_from_udata.py` | Rebuild `u_data_pivot.csv` from `u.data`. |
+| `u.data`, `u_data_pivot.csv`, `u.item` | MovieLens 100k data. |
 
 ## General Pipeline
 
-The main pipeline is implemented in `algos1.py`:
+The main pipeline is implemented in `recomm/pipeline.py`:
 
 ```text
 R -> W -> R_hat -> Cu -> CP model -> recommendations
@@ -58,7 +62,7 @@ Hu[u, i] = 1  # if user u has already consumed or rated item i
 Hu[u, i] = 0  # otherwise
 ```
 
-In `algos1.py`, it is built by:
+In the pipeline module, it is built by:
 
 ```python
 Hu = (R > 0).astype(int)
@@ -112,7 +116,7 @@ R_hat = R @ W
 `R_hat[u, i]` is the predicted score of item `i` for user `u`.
 
 Note: with the SVD method, scores can be negative because the matrix is centered before decomposition. This is not necessarily an error, but it can affect the CP objective.
-VV
+
 ### 5. Candidate sets `Cu`
 
 For each user `u`, a candidate set `Cu[u]` is built from the best scores in `R_hat`.
@@ -252,14 +256,16 @@ This means: each recommended item must have at least one history item linked wit
 
 If `support_threshold` is too low, explanations will be numerous but unselective. If too high, the model may become infeasible.
 
-## Running `algos1.py`
+## Running the pipeline (CLI)
 
-`algos1.py` can be run directly from the command line.
+```bash
+python -m recomm.pipeline --help
+```
 
 ### Basic command
 
 ```bash
-python algos1.py --input u_data_pivot.csv --output recommendations_algos1.csv
+python -m recomm.pipeline --input u_data_pivot.csv --output recommendations.csv
 ```
 
 ### All arguments
@@ -267,7 +273,7 @@ python algos1.py --input u_data_pivot.csv --output recommendations_algos1.csv
 | Argument | Default | Description |
 | --- | --- | --- |
 | `--input` | `u_data_pivot.csv` | Pivot CSV file to load |
-| `--output` | `recommendations_algos1.csv` | Output recommendations CSV file |
+| `--output` | `recommendations.csv` | Output recommendations CSV file |
 | `--method` | `svd` | Method used to build `W`: `fc`, `svd`, or `fl` |
 | `--k` | `20` | Number of latent factors (SVD only) |
 | `--slate-size` | `5` | Number of items to recommend per user |
@@ -282,16 +288,16 @@ python algos1.py --input u_data_pivot.csv --output recommendations_algos1.csv
 
 ```bash
 # Collaborative filtering, 3 recommendations per user
-python algos1.py --method fc --slate-size 3
+python -m recomm.pipeline --method fc --slate-size 3
 
 # SVD with k=10, up to 50 candidates per user
-python algos1.py --method svd --k 10 --slate-size 5 --n-candidates 50
+python -m recomm.pipeline --method svd --k 10 --slate-size 5 --n-candidates 50
 
 # With minimum score filter and explanatory support
-python algos1.py --method svd --min-score 0 --explanation-min 1 --support-threshold 0.05
+python -m recomm.pipeline --method svd --min-score 0 --explanation-min 1 --support-threshold 0.05
 
 # Allow already consumed items
-python algos1.py --include-consumed --slate-size 5
+python -m recomm.pipeline --include-consumed --slate-size 5
 ```
 
 ## Testing `fc` and `svd`
@@ -315,15 +321,23 @@ result_svd = recommend_complete(
 
 Note: if `min_score=0` removes too many candidates, the CP model may become infeasible.
 
-### Features
+## Streamlit demo (CSP vs classical)
 
-- Load the MovieLens pivot (`u_data_pivot.csv`) or upload a custom CSV
-- Choose method **FC** or **SVD**, hyperparameters `k`, `slate_size`, `n_candidates`
-- Scenarios **S1** (classic), **S2** (heuristic), **S3** (hybrid), **S4** (CPMpy)
-- Constraints: category quotas, forbidden pairs, provider exposure, explanatory support
-- S1–S4 comparison for the same user
-- CSV export of recommendations
-- MovieLens genres via `u.item` (download from GroupLens if missing)
+From the repository root:
+
+```bash
+.venv/bin/streamlit run streamlit_app/app.py
+```
+
+The UI mirrors the **`test/` evaluation protocol** on one user and one shared `R̂ = R W`:
+
+| Scenario | Classical (greedy FC) | CSP (CPMpy) |
+| --- | --- | --- |
+| 1. Simple | Top-N by score | CP with cardinality only |
+| 2. With parity | Greedy + forbidden pairs | CP + forbidden pairs |
+| 3. Two constraints | Greedy + pairs + genre cap | CP + pairs + genre cap |
+
+Reported for each run: **time**, **completeness** (slate of size *N*), **constraint satisfaction**, **score sum**. See [test/README.md](test/README.md).
 
 ```bash
 curl -o u.item https://files.grouplens.org/datasets/movielens/ml-100k/u.item
@@ -341,7 +355,7 @@ python3 -m venv .venv
 Syntax check:
 
 ```bash
-.venv/bin/python -m py_compile algos1.py uniform.py
+.venv/bin/python -m py_compile recomm/pipeline.py recomm/operators.py streamlit_app/app.py
 ```
 
 ## Interpreting the Output

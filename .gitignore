@@ -1,9 +1,14 @@
-.venv
-__pycache__
-.agents
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.agents/
+.codex/
 agent.log
-streamlit_app/__pycache__
-validation/HEURISTICS_S1_S8.md
-.codex
-exercices/**
-validation/**
+streamlit_app/__pycache__/
+*.egg-info/
+.DS_Store
+
+# Sorties locales (ne pas versionner les recommandations générées à la racine)
+recommendations*.csv
+sortie.csv

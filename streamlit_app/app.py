@@ -1,14 +1,12 @@
 """
-Streamlit UI — constrained Top-N recommendation (CPMpy).
+Streamlit — classical (greedy FC / Top-N) vs CSP, same protocol as ``test/``.
 
-Run locally:
-    cd codes
+Run:
     streamlit run streamlit_app/app.py
 """
 
 from __future__ import annotations
 
-import io
 import sys
 from pathlib import Path
 
@@ -20,46 +18,18 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from algos1 import load_pivot_csv, save_recommendations_csv  # noqa: E402
-from streamlit_app.metadata import build_item_metadata, GENRES  # noqa: E402
-from streamlit_app.metrics import slate_metrics  # noqa: E402
-from streamlit_app.selection import (  # noqa: E402
-    ConstraintConfig,
-    run_full_pipeline,
-)
+from recomm.evaluation import EVAL_SCENARIOS, run_evaluation_protocol
+from recomm.pipeline import load_pivot_csv, save_recommendations_csv
+from streamlit_app.metadata import GENRES, build_item_metadata
 
 DEFAULT_PIVOT = ROOT / "u_data_pivot.csv"
 DEFAULT_U_ITEM = ROOT / "u.item"
 
-APPROACHES = {
-    "S1": "Top-N classique (baseline)",
-    "S2": "Post-traitement heuristique",
-    "S3": "Hybride glouton (pertinence + diversité)",
-    "S4": "CPMpy — approche proposée",
-}
-
-
-def init_session_state() -> None:
-    """Initialize Streamlit session state keys with default values."""
-    defaults = {
-        "last_result": None,
-        "comparison_results": None,
-        "user_ids": None,
-        "item_ids": None,
-        "R": None,
-        "metadata": None,
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
 
 def load_dataset(uploaded_file, pivot_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load user-item pivot matrix from an upload or a local CSV path."""
     if uploaded_file is not None:
-        content = uploaded_file.read()
         tmp = ROOT / ".streamlit_upload.csv"
-        tmp.write_bytes(content)
+        tmp.write_bytes(uploaded_file.read())
         return load_pivot_csv(tmp)
     if not pivot_path.exists():
         raise FileNotFoundError(f"Pivot file not found: {pivot_path}")
@@ -67,7 +37,6 @@ def load_dataset(uploaded_file, pivot_path: Path) -> tuple[np.ndarray, np.ndarra
 
 
 def parse_forbidden_pairs(text: str, item_id_to_index: dict[int, int]) -> list[tuple[int, int]]:
-    """Parse semicolon-separated item_id pairs into matrix index pairs."""
     pairs: list[tuple[int, int]] = []
     for chunk in text.replace("\n", ";").split(";"):
         chunk = chunk.strip()
@@ -84,426 +53,255 @@ def parse_forbidden_pairs(text: str, item_id_to_index: dict[int, int]) -> list[t
     return list(dict.fromkeys(pairs))
 
 
-def build_constraints_from_sidebar(metadata: dict) -> ConstraintConfig:
-    """Build a ConstraintConfig from sidebar widget values in session state."""
-    cfg = ConstraintConfig()
-    cfg.item_categories = metadata["item_categories"]
-    cfg.item_providers = metadata["item_providers"]
-
-    if st.session_state.get("use_category_constraint"):
-        cfg.category_min = st.session_state.get("category_min")
-        cfg.category_max = st.session_state.get("category_max")
-
-    if st.session_state.get("use_provider_constraint"):
-        cfg.provider_min = st.session_state.get("provider_min")
-        cfg.provider_max = st.session_state.get("provider_max")
-
-    if st.session_state.get("use_explanation"):
-        cfg.explanation_min = int(st.session_state.get("explanation_min", 1))
-        cfg.support_threshold = float(st.session_state.get("support_threshold", 1e-12))
-
-    text = st.session_state.get("forbidden_pairs_text", "")
-    item_ids = st.session_state.get("item_ids")
-    if text and item_ids is not None:
-        id_map = {int(v): i for i, v in enumerate(item_ids)}
-        cfg.forbidden_pairs = parse_forbidden_pairs(text, id_map)
-
-    return cfg
-
-
-def recommendations_to_dataframe(
-    result: dict,
-    user_ids: np.ndarray,
+def slate_to_df(
+    slate: list[int],
+    u: int,
+    R_hat: np.ndarray,
     item_ids: np.ndarray,
     titles: dict[int, str],
-    metadata: dict,
-    selected_user_index: int,
+    categories: np.ndarray,
 ) -> pd.DataFrame:
-    """Format one user's recommendations as a display DataFrame."""
-    u = selected_user_index
-    R_hat = result["R_hat"]
     rows = []
-    explanations = result.get("explanations", {}).get(u, {})
-
-    for rank, item_index in enumerate(result["recommendations"].get(u, []), start=1):
-        movie_id = int(item_ids[item_index])
-        cat = int(metadata["item_categories"][item_index])
-        support = explanations.get(item_index, explanations.get(int(item_index), []))
-        support_ids = [int(item_ids[j]) for j in support]
-
+    for rank, idx in enumerate(slate, start=1):
+        mid = int(item_ids[idx])
+        cat = int(categories[idx])
         rows.append(
             {
-                "Rang": rank,
-                "Item ID": movie_id,
-                "Titre": titles.get(movie_id, f"Item {movie_id}"),
-                "Score R̂": round(float(R_hat[u, item_index]), 4),
-                "Catégorie": GENRES[cat] if cat < len(GENRES) else str(cat),
-                "Support (IDs)": ", ".join(map(str, support_ids)) if support_ids else "—",
+                "Rank": rank,
+                "Item ID": mid,
+                "Title": titles.get(mid, str(mid)),
+                "Score R̂": round(float(R_hat[u, idx]), 4),
+                "Genre bucket": GENRES[cat] if cat < len(GENRES) else str(cat),
             }
         )
-
     return pd.DataFrame(rows)
 
 
-def export_csv_bytes(result: dict, user_ids: np.ndarray, item_ids: np.ndarray) -> bytes:
-    """Serialize recommendations to CSV bytes for download."""
-    buffer = io.StringIO()
-    path = ROOT / ".streamlit_export.csv"
-    save_recommendations_csv(path, result, user_ids, item_ids)
-    return path.read_bytes()
+def results_to_table(protocol: dict) -> pd.DataFrame:
+    records = []
+    for scenario in EVAL_SCENARIOS:
+        block = protocol["by_scenario"][scenario.id]
+        for method_id in ("classical", "csp"):
+            r = block[method_id]
+            records.append(
+                {
+                    "Scenario": scenario.label,
+                    "Method": r["method_label"],
+                    "Time (s)": round(r["elapsed_s"], 4),
+                    "Complete (|slate|=N)": "Yes" if r["complete"] else "No",
+                    "Constraints OK": "Yes" if r["constraint_satisfied"] else "No",
+                    "Violations": r["n_violations"],
+                    "CSP feasible": "—"
+                    if method_id == "classical"
+                    else ("Yes" if r["cp_feasible"] else "No"),
+                    "Score sum": round(r["score_sum"], 4),
+                }
+            )
+    return pd.DataFrame(records)
 
 
 def render_sidebar() -> dict:
-    """Render sidebar widgets and return the current run configuration."""
-    st.sidebar.header("Configuration")
+    st.sidebar.header("Dataset")
+    uploaded = st.sidebar.file_uploader("Pivot CSV", type=["csv"])
+    pivot_path = Path(st.sidebar.text_input("Pivot path", str(DEFAULT_PIVOT)))
+    u_item_path = Path(st.sidebar.text_input("u.item path", str(DEFAULT_U_ITEM)))
 
-    uploaded = st.sidebar.file_uploader("CSV pivot (optionnel)", type=["csv"])
-    pivot_path = Path(st.sidebar.text_input("Chemin pivot local", str(DEFAULT_PIVOT)))
-
-    st.sidebar.subheader("Modèle de scores R̂ = RW")
-    method_label = st.sidebar.radio("Méthode W", ["SVD (facteurs latents)", "FC (item-item)"])
-    method = "svd" if "SVD" in method_label else "fc"
+    st.sidebar.header("Score model (shared)")
+    method = "svd" if st.sidebar.radio("W", ["SVD", "FC"]) == "SVD" else "fc"
     k = st.sidebar.slider("k (SVD)", 2, 50, 20, disabled=(method == "fc"))
+    n_candidates = st.sidebar.slider("Candidates / user", 10, 200, 50)
+    slate_size = st.sidebar.slider("Slate size N", 1, 15, 5)
+    user_pick = st.sidebar.number_input("user_id", min_value=1, value=196)
 
-    st.sidebar.subheader("Top-N")
-    slate_size = st.sidebar.slider("slate_size (N)", 1, 15, 5)
-    n_candidates = st.sidebar.slider("n_candidates", 10, 200, 50)
-    min_score_enabled = st.sidebar.checkbox("Filtrer par score minimum", value=False)
-    min_score_val = st.sidebar.number_input("min_score", value=0.0, step=0.1, disabled=not min_score_enabled)
-    min_score = min_score_val if min_score_enabled else None
-    exclude_consumed = st.sidebar.checkbox("Exclure items déjà notés", value=True)
-
-    st.sidebar.subheader("Approche de sélection")
-    approach = st.sidebar.selectbox(
-        "Algorithme",
-        options=list(APPROACHES.keys()),
-        format_func=lambda k: APPROACHES[k],
-    )
-    diversity_weight = st.sidebar.slider("λ diversité (Hybride glouton)", 0.0, 2.0, 0.5, step=0.1)
-    solver = st.sidebar.selectbox("Solveur CPMpy", ["ortools"], index=0)
-
-    st.sidebar.subheader("Périmètre utilisateurs")
-    scope = st.sidebar.radio("Exécuter pour", ["Un utilisateur", "N premiers", "Tous"])
-    if scope == "Un utilisateur":
-        user_pick = st.sidebar.number_input("user_id MovieLens", min_value=1, value=1, step=1)
-        user_scope = ("single", int(user_pick))
-    elif scope == "N premiers":
-        n_users = st.sidebar.slider("Nombre d'utilisateurs", 1, 50, 5)
-        user_scope = ("first_n", n_users)
-    else:
-        st.sidebar.warning("Tous les utilisateurs peut être lent en CPMpy.")
-        user_scope = ("all", None)
-
-    st.sidebar.subheader("Contraintes (Heuristique / CPMpy)")
-    st.session_state["use_category_constraint"] = st.sidebar.checkbox("Quota catégories", value=False)
-    if st.session_state["use_category_constraint"]:
-        st.session_state["category_min"] = st.sidebar.number_input("Min / catégorie / user", 0, 10, 0)
-        st.session_state["category_max"] = st.sidebar.number_input("Max / catégorie / user", 0, 10, 2)
-
-    st.session_state["use_provider_constraint"] = st.sidebar.checkbox("Exposition fournisseurs (global)", value=False)
-    if st.session_state["use_provider_constraint"]:
-        st.session_state["provider_min"] = st.sidebar.number_input("Min / fournisseur (global)", 0, 100, 0)
-        st.session_state["provider_max"] = st.sidebar.number_input("Max / fournisseur (global)", 1, 500, 200)
-
-    st.session_state["use_explanation"] = st.sidebar.checkbox("Support explicatif (CPMpy)", value=False)
-    if st.session_state["use_explanation"]:
-        st.session_state["explanation_min"] = st.sidebar.number_input("explanation_min", 0, 5, 1)
-        st.session_state["support_threshold"] = st.sidebar.number_input(
-            "support_threshold", min_value=0.0, value=1e-12, format="%.2e"
-        )
-
-    st.session_state["forbidden_pairs_text"] = st.sidebar.text_area(
-        "Paires interdites (item_id,item_id ; …)",
-        placeholder="50,51; 120,121",
-        height=80,
-    )
-
-    u_item_path = st.sidebar.text_input("u.item (genres MovieLens)", str(DEFAULT_U_ITEM))
-
-    st.sidebar.subheader("Affichage")
-    show_objective = st.sidebar.checkbox("Afficher l'objectif", value=True)
+    st.sidebar.header("Parity constraints")
+    st.sidebar.caption("Used in scenarios 2 and 3 (same as ``test/``).")
+    forbidden_text = st.sidebar.text_input("Forbidden pairs (id,id; …)", "50,51")
+    category_max = st.sidebar.number_input("Max items per genre (scenario 3)", 1, 10, 2)
 
     return {
         "uploaded": uploaded,
         "pivot_path": pivot_path,
+        "u_item_path": u_item_path,
         "method": method,
         "k": k,
-        "slate_size": slate_size,
         "n_candidates": n_candidates,
-        "min_score": min_score,
-        "exclude_consumed": exclude_consumed,
-        "approach": approach,
-        "diversity_weight": diversity_weight,
-        "solver": solver,
-        "user_scope": user_scope,
-        "u_item_path": Path(u_item_path),
-        "show_objective": show_objective,
+        "slate_size": slate_size,
+        "user_pick": int(user_pick),
+        "forbidden_text": forbidden_text,
+        "category_max": int(category_max),
     }
 
 
-def resolve_user_indices(user_ids: np.ndarray, scope: tuple) -> list[int]:
-    """Map sidebar user scope selection to matrix row indices."""
-    kind, value = scope
-    id_to_index = {int(v): i for i, v in enumerate(user_ids)}
-    if kind == "single":
-        if value not in id_to_index:
-            raise ValueError(f"user_id {value} not found in the dataset.")
-        return [id_to_index[value]]
-    if kind == "first_n":
-        return list(range(min(int(value), len(user_ids))))
-    return list(range(len(user_ids)))
-
-
 def main() -> None:
-    """Streamlit application entry point."""
-    st.set_page_config(
-        page_title="Recommandation Top-N — CPMpy",
-        page_icon="U",
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
-    init_session_state()
+    st.set_page_config(page_title="Classical vs CSP", layout="wide")
+    st.title("Classical vs CSP — evaluation protocol")
+    st.markdown(
+        """
+        Same progression as the **`test/`** scripts:
 
-    st.title("Recommandation Top-N sous contraintes")
-    st.caption(
-        "Pipeline R → W → R̂ → C_u → sélection · MovieLens 100K · CPMpy / OR-Tools"
+        1. **Simple** — unconstrained Top-N (classical) vs CSP with cardinality only.
+        2. **With parity** — forbidden pairs on both sides (`simple_csp_with_parity` / `fc_with_parity`).
+        3. **Two constraints** — parity **plus** genre/category cap (`csp_with_parity` on MovieLens).
+
+        Metrics: **time**, **completeness** (full slate of size *N*), **constraint satisfaction**.
+        Only two selectors: **classical greedy FC** and **CSP (CPMpy)** — no extra heuristics.
+        """
     )
 
     cfg = render_sidebar()
+    run = st.button("Run full protocol (3 scenarios × 2 methods)", type="primary")
 
-    col_run, col_cmp = st.columns(2)
-    run_clicked = col_run.button("Lancer la recommandation", type="primary", use_container_width=True)
-    cmp_clicked = col_cmp.button("Comparer les algorithmes (même périmètre)", use_container_width=True)
-
-    if run_clicked or cmp_clicked:
+    if run:
         try:
-            with st.spinner("Chargement des données…"):
-                user_ids, item_ids, R = load_dataset(cfg["uploaded"], cfg["pivot_path"])
-                metadata = build_item_metadata(item_ids, cfg["u_item_path"])
-                st.session_state.update(
-                    user_ids=user_ids,
-                    item_ids=item_ids,
-                    R=R,
+            user_ids, item_ids, R = load_dataset(cfg["uploaded"], cfg["pivot_path"])
+            metadata = build_item_metadata(item_ids, cfg["u_item_path"])
+            id_map = {int(v): i for i, v in enumerate(item_ids)}
+            pairs = parse_forbidden_pairs(cfg["forbidden_text"], id_map)
+            if cfg["user_pick"] not in id_map:
+                raise ValueError(f"user_id {cfg['user_pick']} not in pivot.")
+            u = id_map[cfg["user_pick"]]
+
+            with st.spinner("Building R̂ = R W and running 6 experiments…"):
+                protocol = run_evaluation_protocol(
+                    R,
+                    u,
                     metadata=metadata,
+                    method=cfg["method"],
+                    k=cfg["k"],
+                    n_candidates=cfg["n_candidates"],
+                    slate_size=cfg["slate_size"],
+                    forbidden_pairs=pairs,
+                    category_max=cfg["category_max"],
                 )
-
-            constraints = build_constraints_from_sidebar(metadata)
-            user_indices = resolve_user_indices(user_ids, cfg["user_scope"])
-
-            if cmp_clicked:
-                results = {}
-                progress = st.progress(0.0, text="Comparaison des algorithmes…")
-                for i, approach in enumerate(["S1", "S2", "S3", "S4"]):
-                    progress.progress((i + 1) / 4, text=f"Exécution de {APPROACHES[approach]}…")
-                    results[approach] = run_full_pipeline(
-                        R=R,
-                        method=cfg["method"],
-                        k=cfg["k"],
-                        n_candidates=cfg["n_candidates"],
-                        exclude_consumed=cfg["exclude_consumed"],
-                        min_score=cfg["min_score"],
-                        approach=approach,
-                        user_indices=user_indices,
-                        slate_size=cfg["slate_size"],
-                        constraints=constraints,
-                        diversity_weight=cfg["diversity_weight"],
-                        solver_name=cfg["solver"],
-                        genre_matrix=metadata["genre_matrix"],
-                    )
-                progress.empty()
-                st.session_state["comparison_results"] = results
-                st.session_state["last_result"] = results[cfg["approach"]]
-                st.success("Comparaison des algorithmes terminée.")
-            else:
-                algo_name = APPROACHES.get(cfg["approach"], cfg["approach"])
-                with st.spinner(f"Exécution de « {algo_name} »…"):
-                    result = run_full_pipeline(
-                        R=R,
-                        method=cfg["method"],
-                        k=cfg["k"],
-                        n_candidates=cfg["n_candidates"],
-                        exclude_consumed=cfg["exclude_consumed"],
-                        min_score=cfg["min_score"],
-                        approach=cfg["approach"],
-                        user_indices=user_indices,
-                        slate_size=cfg["slate_size"],
-                        constraints=constraints,
-                        diversity_weight=cfg["diversity_weight"],
-                        solver_name=cfg["solver"],
-                        genre_matrix=metadata["genre_matrix"],
-                    )
-                st.session_state["last_result"] = result
-                st.session_state["comparison_results"] = None
-                if result["status"]:
-                    obj_str = (
-                        f" · objectif = {result.get('objective'):.3f}"
-                        if cfg["show_objective"] and result.get("objective") is not None
-                        else ""
-                    )
-                    st.success(f"« {algo_name} » terminé en {result['elapsed_s']:.2f}s{obj_str}")
-                else:
-                    st.error("Aucune solution faisable avec ces contraintes.")
-
+            st.session_state["protocol"] = protocol
+            st.session_state["user_ids"] = user_ids
+            st.session_state["item_ids"] = item_ids
+            st.session_state["metadata"] = metadata
+            st.success("Protocol finished.")
         except Exception as exc:
-            st.error(f"Erreur : {exc}")
+            st.error(str(exc))
 
-    tab_rec, tab_cmp, tab_data, tab_export, tab_about = st.tabs(
-        ["Recommandations", "Comparaison", "Données", "Export", "À propos"]
-    )
-
-    result = st.session_state.get("last_result")
-    user_ids = st.session_state.get("user_ids")
-    item_ids = st.session_state.get("item_ids")
+    protocol = st.session_state.get("protocol")
     metadata = st.session_state.get("metadata")
-    show_objective = cfg["show_objective"]
+    item_ids = st.session_state.get("item_ids")
 
-    with tab_rec:
-        if result is None or user_ids is None:
-            st.info("Configurez les paramètres dans la barre latérale, puis lancez une exécution.")
+    tab_table, tab_detail, tab_about = st.tabs(["Summary", "Slates", "About"])
+
+    with tab_table:
+        if not protocol:
+            st.info("Run the protocol to populate the table.")
         else:
-            algo_label = APPROACHES.get(result.get("approach"), result.get("approach", "—"))
-            if show_objective:
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Algorithme", algo_label)
-                c2.metric("Temps (s)", f"{result.get('elapsed_s', 0):.2f}")
-                c3.metric("Faisable", "Oui" if result.get("status") else "Non")
-                c4.metric("Objectif", f"{result.get('objective', 0):.3f}" if result.get("objective") is not None else "—")
-            else:
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Algorithme", algo_label)
-                c2.metric("Temps (s)", f"{result.get('elapsed_s', 0):.2f}")
-                c3.metric("Faisable", "Oui" if result.get("status") else "Non")
+            df = results_to_table(protocol)
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
-            rec_users = sorted(result["recommendations"].keys())
-            if not rec_users:
-                st.warning("Aucune recommandation produite.")
-            else:
-                id_to_index = {int(v): i for i, v in enumerate(user_ids)}
-                index_to_id = {i: int(v) for i, v in enumerate(user_ids)}
-                default_u = rec_users[0]
-                selected_id = st.selectbox(
-                    "Utilisateur",
-                    options=[index_to_id[u] for u in rec_users],
-                    index=0,
-                )
-                u = id_to_index[selected_id]
-
-                df = recommendations_to_dataframe(
-                    result, user_ids, item_ids, metadata["titles"], metadata, u
-                )
-                st.subheader(f"Liste Top-{result.get('slate_size', '?')} — user {selected_id}")
-                st.dataframe(df, use_container_width=True, hide_index=True)
-
-                if not df.empty:
-                    st.bar_chart(df.set_index("Titre")["Score R̂"])
-
-                m = slate_metrics(
-                    result["recommendations"].get(u, []),
-                    result["R_hat"][u],
-                    metadata["item_categories"],
-                    metadata["genre_matrix"],
-                )
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Score moyen", f"{m['score_mean']:.3f}")
-                m2.metric("ILD", f"{m['ild']:.2f}")
-                m3.metric("Catégories distinctes", m["n_categories"])
-                m4.metric("Items", m["count"])
-
-                with st.expander("Historique de l'utilisateur (notes > 0)"):
-                    R = st.session_state["R"]
-                    history = [
-                        {
-                            "Item ID": int(item_ids[i]),
-                            "Titre": metadata["titles"].get(int(item_ids[i]), ""),
-                            "Note": float(R[u, i]),
-                        }
-                        for i in np.where(R[u] > 0)[0]
-                    ]
-                    st.dataframe(pd.DataFrame(history), use_container_width=True, hide_index=True)
-
-    with tab_cmp:
-        comparison = st.session_state.get("comparison_results")
-        if not comparison:
-            st.info("Cliquez sur « Comparer les algorithmes » pour afficher un tableau comparatif.")
-        else:
-            rows = []
-            u = next(iter(comparison["S1"]["recommendations"]))
-            for approach, res in comparison.items():
-                slate = res["recommendations"].get(u, [])
-                m = slate_metrics(
-                    slate,
-                    res["R_hat"][u],
-                    metadata["item_categories"],
-                    metadata["genre_matrix"],
-                )
-                row = {
-                    "Algorithme": APPROACHES[approach],
-                    "Faisable": "Oui" if res["status"] else "Non",
-                    "Temps (s)": round(res["elapsed_s"], 3),
-                }
-                if show_objective:
-                    row["Objectif"] = round(res.get("objective"), 3) if res.get("objective") is not None else "—"
-                row.update({
-                    "Score moyen": round(m["score_mean"], 4),
-                    "ILD": round(m["ild"], 3),
-                    "Catégories": m["n_categories"],
-                    "Items": m["count"],
-                })
-                rows.append(row)
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-            st.subheader("Listes recommandées (premier utilisateur du périmètre)")
-            for approach, res in comparison.items():
-                slate = res["recommendations"].get(u, [])
-                ids = [int(item_ids[i]) for i in slate]
-                st.markdown(f"**{APPROACHES[approach]}** — {', '.join(map(str, ids)) or '∅'}")
-
-    with tab_data:
-        if user_ids is None:
-            st.info("Chargez d'abord les données.")
-        else:
-            R = st.session_state["R"]
-            d1, d2, d3 = st.columns(3)
-            d1.metric("Utilisateurs", len(user_ids))
-            d2.metric("Items", len(item_ids))
-            d3.metric("Métadonnées", metadata["metadata_source"])
-            density = np.count_nonzero(R) / R.size
-            st.write(f"Densité de la matrice R : **{density:.4%}**")
-            st.caption(
-                "Source des genres : fichier u.item MovieLens si disponible, "
-                "sinon catégories synthétiques (movie_id mod 19)."
+            st.subheader("How to read this")
+            st.markdown(
+                """
+                - **Complete** — classical greedy may stop before *N* items when constraints block candidates;
+                  CSP either returns *N* items or reports infeasibility.
+                - **Constraints OK** — parity / genre rules satisfied on the final slate.
+                - When scenario ≥ 2, compare **violations** and **score sum**: CSP trades score for feasibility.
+                """
             )
 
-    with tab_export:
-        if result is None or user_ids is None:
-            st.info("Aucun résultat à exporter.")
+            # Highlight rows where CSP wins on feasibility
+            for scenario in EVAL_SCENARIOS:
+                block = protocol["by_scenario"][scenario.id]
+                if scenario.id == "simple":
+                    continue
+                c_ok = block["csp"]["constraint_satisfied"]
+                g_ok = block["classical"]["constraint_satisfied"]
+                if c_ok and not g_ok:
+                    st.success(
+                        f"**{scenario.label}:** CSP satisfies constraints; classical does not."
+                    )
+                elif not block["csp"]["cp_feasible"]:
+                    st.warning(f"**{scenario.label}:** CSP infeasible — relax constraints or widen candidates.")
+
+    with tab_detail:
+        if not protocol or metadata is None:
+            st.info("Run the protocol first.")
         else:
-            csv_bytes = export_csv_bytes(result, user_ids, item_ids)
-            st.download_button(
-                "Télécharger recommendations.csv",
-                data=csv_bytes,
-                file_name=f"recommendations_{result.get('approach', 'run')}.csv",
-                mime="text/csv",
-                use_container_width=True,
+            scenario_pick = st.selectbox(
+                "Scenario",
+                EVAL_SCENARIOS,
+                format_func=lambda s: s.label,
             )
+            u = protocol["user_index"]
+            R_hat = protocol["R_hat"]
+            block = protocol["by_scenario"][scenario_pick.id]
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.markdown("**Classical (greedy)**")
+                st.dataframe(
+                    slate_to_df(
+                        block["classical"]["slate"],
+                        u,
+                        R_hat,
+                        item_ids,
+                        metadata["titles"],
+                        metadata["item_categories"],
+                    ),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                if block["classical"]["violations"]:
+                    st.code("\n".join(block["classical"]["violations"]))
+            with col_b:
+                st.markdown("**CSP (CPMpy)**")
+                st.dataframe(
+                    slate_to_df(
+                        block["csp"]["slate"],
+                        u,
+                        R_hat,
+                        item_ids,
+                        metadata["titles"],
+                        metadata["item_categories"],
+                    ),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                if not block["csp"]["cp_feasible"]:
+                    st.error("Solver: no feasible solution.")
+                elif block["csp"]["violations"]:
+                    st.code("\n".join(block["csp"]["violations"]))
+
+            if scenario_pick.id == "two_constraints" and item_ids is not None:
+                csp_slate = block["csp"]["slate"]
+                if csp_slate and block["csp"]["cp_feasible"]:
+                    fake_result = {
+                        "recommendations": {u: csp_slate},
+                        "explanations": {},
+                        "R_hat": R_hat,
+                    }
+                    user_ids = st.session_state.get("user_ids")
+                    if user_ids is not None and st.button("Prepare CSP CSV export"):
+                        path = ROOT / ".streamlit_export.csv"
+                        save_recommendations_csv(path, fake_result, user_ids, item_ids)
+                        st.download_button(
+                            "Download CSV",
+                            path.read_bytes(),
+                            file_name="recommendations_csp.csv",
+                            mime="text/csv",
+                        )
 
     with tab_about:
         st.markdown(
             """
-            ### Objectif
-            Cette interface teste le pipeline **R → W → R̂ → C_u → sélection** de la thèse.
+            ### Mapping to `test/`
 
-            ### Algorithmes
-            - **Top-N classique (baseline)** : classement par score décroissant
-            - **Post-traitement heuristique** : réparation locale des contraintes
-            - **Hybride glouton (pertinence + diversité)** : sélection gloutonne (λ)
-            - **CPMpy — approche proposée** : optimisation sous contraintes déclaratives
+            | Script | Role |
+            | --- | --- |
+            | `simple_csp_with_parity.py` | Toy or CSV: **FC greedy vs simple CSP** with pairs + genre |
+            | `fc_with_parity.py` | **Classical only** with parity on 5×5 or MovieLens |
+            | `csp_with_parity.py` | Full **R̂ = R W** CSP with **category bounds** on MovieLens |
 
-            ### Exécution locale
+            Implementation shared with CLI: `recomm/evaluation.py`.
+
             ```bash
-            cd codes
-            pip install -r requirements.txt
-            streamlit run streamlit_app/app.py
+            python test/simple_csp_with_parity.py
+            python test/fc_with_parity.py --csv u_data_pivot.csv --user-id 196
+            python test/csp_with_parity.py --input u_data_pivot.csv --category-max 2
             ```
             """
         )
@@ -511,4 +309,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

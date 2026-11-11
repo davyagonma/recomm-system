@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from uniform import compute_R_hat, W_collaborative_filtering, W_svd
+from recomm.operators import compute_R_hat, W_collaborative_filtering, W_svd
 from streamlit_app.metadata import build_item_metadata
 
 
@@ -250,7 +250,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", default="u_data_pivot.csv", help="Pivot CSV file to load")
     parser.add_argument(
         "--output",
-        default="recommendations_algos1.csv",
+        default="recommendations.csv",
         help="Recommendations CSV file to produce",
     )
     parser.add_argument("--u-item", default="u.item", help="Fichier MovieLens des catégories")
